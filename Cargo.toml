@@ -1,0 +1,18 @@
+[package]
+name = "netkit"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[workspace]
+# members = ["netkit-packet", "netkit-impl", "netkit-capture", "examples/*"]
+members = ["netkit-packet", "netkit-capture", "examples/*"]
+
+[profile.release-prof]
+inherits = "release"
+debug = true
+
+[dependencies]
+netkit-packet = { path = "netkit-packet" }
+netkit-capture = { path = "netkit-capture" }

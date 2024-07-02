@@ -1,0 +1,6 @@
+/target
+
+# perf and flamegraph
+perf.data*
+perf.svg
+flamegraph.svg
