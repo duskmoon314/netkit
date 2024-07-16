@@ -185,35 +185,15 @@ where
 }
 
 /// Builder for [`Eth`].
-#[derive(Clone)]
-pub struct EthBuilder<T = Vec<u8>>
-where
-    T: AsRef<[u8]>,
-{
+#[derive(Clone, Debug, Default)]
+pub struct EthBuilder {
     src: Option<EthAddr>,
     dst: Option<EthAddr>,
     eth_type: Option<EthType>,
-    payload: Option<T>,
+    payload: Vec<u8>,
 }
 
-impl<T> Default for EthBuilder<T>
-where
-    T: AsRef<[u8]>,
-{
-    fn default() -> Self {
-        Self {
-            src: None,
-            dst: None,
-            eth_type: None,
-            payload: None,
-        }
-    }
-}
-
-impl<T> EthBuilder<T>
-where
-    T: AsRef<[u8]>,
-{
+impl EthBuilder {
     /// Create a new Eth builder.
     pub fn new() -> Self {
         Self::default()
@@ -238,26 +218,21 @@ where
     }
 
     /// Set the payload.
-    pub fn payload(&mut self, payload: T) -> &mut Self {
-        self.payload = Some(payload);
+    pub fn payload<T: AsRef<[u8]>>(&mut self, payload: T) -> &mut Self {
+        self.payload.extend_from_slice(payload.as_ref());
         self
     }
 
     /// Build the Eth layer.
     pub fn build(&self) -> Eth<Vec<u8>> {
-        let len = MIN_HEADER_LENGTH + self.payload.as_ref().map(|p| p.as_ref().len()).unwrap_or(0);
+        let len = MIN_HEADER_LENGTH + self.payload.len();
 
         let mut eth = unsafe { Eth::new_unchecked(vec![0; len]) };
 
         eth.src_mut().set(self.src.clone().unwrap_or_default());
         eth.dst_mut().set(self.dst.clone().unwrap_or_default());
         eth.eth_type_mut().set(self.eth_type.unwrap_or_default());
-        eth.payload_mut().copy_from_slice(
-            self.payload
-                .as_ref()
-                .map(|p| p.as_ref())
-                .unwrap_or_default(),
-        );
+        eth.payload_mut().copy_from_slice(self.payload.as_ref());
 
         eth
     }
@@ -396,7 +371,6 @@ mod tests {
             dst: [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB],
             src: [0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67],
             eth_type: EthType::Ipv4,
-            payload: []
         );
 
         assert_eq!(

@@ -1,33 +1,30 @@
 [package]
 name = "netkit-packet"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+keywords.workspace = true
+repository.workspace = true
+include = ["src/**/*", "README.md", "LICENSE*"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-num_enum = "0.7.2"
-paste = "1.0.15"
-serde = { version = "1.0.202", features = ["derive"], optional = true }
-strum = { version = "0.26.2", features = ["derive"] }
-thiserror = "1.0.61"
+# enum helper
+num_enum = { workspace = true }
+strum = { workspace = true }
+
+# error helper
+thiserror = { workspace = true }
+
+# serde
+serde = { workspace = true, optional = true }
 
 [dev-dependencies]
-criterion = "0.5.1"
-pprof = { version = "0.13.0", features = [
-    "flamegraph",
-    "prost-codec",
-    "criterion",
-] }
-serde_json = "1.0.117"
-
-[[bench]]
-name = "pprof"
-harness = false
-
-[[bench]]
-name = "test"
-harness = false
+criterion = { workspace = true }
+pprof = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 default = ["serde"]

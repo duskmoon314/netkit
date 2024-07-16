@@ -1,4 +1,4 @@
-//！ Ethernet MAC address
+//! Ethernet MAC address
 
 use core::{convert::TryFrom, fmt::Display, str::FromStr};
 

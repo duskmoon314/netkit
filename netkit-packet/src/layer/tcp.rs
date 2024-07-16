@@ -1,7 +1,11 @@
+//! Transmission Control Protocol (TCP) layer.
+
 use crate::{field_spec, prelude::*};
 
+/// Error type for Tcp layer.
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]
 pub enum TcpError {
+    /// Invalid Tcp length.
     #[error("Invalid Tcp length: Length {0} is less than 8")]
     InvalidLength(usize),
 }
@@ -15,8 +19,10 @@ field_spec!(WindowSizeSpec, u16, u16);
 field_spec!(ChecksumSpec, u16, u16);
 field_spec!(UrgentPointerSpec, u16, u16);
 
+/// Minimum length of a Tcp packet.
 pub const MIN_HEADER_LENGTH: usize = 20;
 
+/// Transmission Control Protocol (TCP) layer.
 pub struct Tcp<T>
 where
     T: AsRef<[u8]>,
@@ -28,14 +34,23 @@ impl<T> Tcp<T>
 where
     T: AsRef<[u8]>,
 {
+    /// Field ranges of the source port: 0..2
     pub const FIELD_SRC_PORT: core::ops::Range<usize> = 0..2;
+    /// Field ranges of the destination port: 2..4
     pub const FIELD_DST_PORT: core::ops::Range<usize> = 2..4;
+    /// Field ranges of the sequence number: 4..8
     pub const FIELD_SEQ_NUM: core::ops::Range<usize> = 4..8;
+    /// Field ranges of the acknowledgment number: 8..12
     pub const FIELD_ACK_NUM: core::ops::Range<usize> = 8..12;
+    /// Field ranges of the data offset: 12..13
     pub const FIELD_DATA_OFFSET: core::ops::Range<usize> = 12..13;
+    /// Field ranges of the flags: 13..14
     pub const FIELD_FLAGS: core::ops::Range<usize> = 13..14;
+    /// Field ranges of the window size: 14..16
     pub const FIELD_WINDOW_SIZE: core::ops::Range<usize> = 14..16;
+    /// Field ranges of the checksum: 16..18
     pub const FIELD_CHECKSUM: core::ops::Range<usize> = 16..18;
+    /// Field ranges of the urgent pointer: 18..20
     pub const FIELD_URGENT_POINTER: core::ops::Range<usize> = 18..20;
 
     /// Create a new Tcp layer without validation.
@@ -52,6 +67,7 @@ where
         Self { data }
     }
 
+    /// Validate the Tcp layer.
     pub fn validate(&self) -> Result<(), TcpError> {
         if self.data.as_ref().len() < MIN_HEADER_LENGTH {
             return Err(TcpError::InvalidLength(self.data.as_ref().len()));
@@ -62,6 +78,7 @@ where
         Ok(())
     }
 
+    /// Create a new Tcp layer from raw data.
     #[inline]
     pub fn new(data: T) -> Result<Self, TcpError> {
         let res = unsafe { Self::new_unchecked(data) };
@@ -69,31 +86,37 @@ where
         Ok(res)
     }
 
+    /// Get the inner raw data.
     #[inline]
     pub const fn inner(&self) -> &T {
         &self.data
     }
 
+    /// Get the accessor of the source port.
     #[inline]
     pub fn src_port(&self) -> &Field<PortSpec> {
         unsafe { &*(self.data.as_ref()[Self::FIELD_SRC_PORT].as_ptr() as *const Field<PortSpec>) }
     }
 
+    /// Get the accessor of the destination port.
     #[inline]
     pub fn dst_port(&self) -> &Field<PortSpec> {
         unsafe { &*(self.data.as_ref()[Self::FIELD_DST_PORT].as_ptr() as *const Field<PortSpec>) }
     }
 
+    /// Get the accessor of the sequence number.
     #[inline]
     pub fn seq_num(&self) -> &Field<SeqNumSpec> {
         unsafe { &*(self.data.as_ref()[Self::FIELD_SEQ_NUM].as_ptr() as *const Field<SeqNumSpec>) }
     }
 
+    /// Get the accessor of the acknowledgment number.
     #[inline]
     pub fn ack_num(&self) -> &Field<AckNumSpec> {
         unsafe { &*(self.data.as_ref()[Self::FIELD_ACK_NUM].as_ptr() as *const Field<AckNumSpec>) }
     }
 
+    /// Get the accessor of the data offset.
     #[inline]
     pub fn data_offset(&self) -> &Field<DataOffsetSpec> {
         unsafe {
@@ -101,11 +124,13 @@ where
         }
     }
 
+    /// Get the accessor of the flags.
     #[inline]
     pub fn flags(&self) -> &Field<FlagsSpec> {
         unsafe { &*(self.data.as_ref()[Self::FIELD_FLAGS].as_ptr() as *const Field<FlagsSpec>) }
     }
 
+    /// Get the accessor of the window size.
     #[inline]
     pub fn window_size(&self) -> &Field<WindowSizeSpec> {
         unsafe {
@@ -113,6 +138,7 @@ where
         }
     }
 
+    /// Get the accessor of the checksum.
     #[inline]
     pub fn checksum(&self) -> &Field<ChecksumSpec> {
         unsafe {
@@ -120,6 +146,7 @@ where
         }
     }
 
+    /// Get the accessor of the urgent pointer.
     #[inline]
     pub fn urgent_pointer(&self) -> &Field<UrgentPointerSpec> {
         unsafe {
@@ -128,12 +155,14 @@ where
         }
     }
 
+    /// Get the options.
     #[inline]
     pub fn options(&self) -> &[u8] {
         let range = MIN_HEADER_LENGTH..self.data_offset().get() as usize * 4;
         &self.data.as_ref()[range]
     }
 
+    /// Get the payload.
     #[inline]
     pub fn payload(&self) -> &[u8] {
         let range = self.data_offset().get() as usize * 4..;
@@ -145,11 +174,13 @@ impl<T> Tcp<T>
 where
     T: AsRef<[u8]> + AsMut<[u8]>,
 {
+    /// Get the mutable inner raw data.
     #[inline]
     pub fn inner_mut(&mut self) -> &mut T {
         &mut self.data
     }
 
+    /// Get the mutable accessor of the source port.
     #[inline]
     pub fn src_port_mut(&mut self) -> &mut Field<PortSpec> {
         unsafe {
@@ -157,6 +188,7 @@ where
         }
     }
 
+    /// Get the mutable accessor of the destination port.
     #[inline]
     pub fn dst_port_mut(&mut self) -> &mut Field<PortSpec> {
         unsafe {
@@ -164,6 +196,7 @@ where
         }
     }
 
+    /// Get the mutable accessor of the sequence number.
     #[inline]
     pub fn seq_num_mut(&mut self) -> &mut Field<SeqNumSpec> {
         unsafe {
@@ -171,6 +204,7 @@ where
         }
     }
 
+    /// Get the mutable accessor of the acknowledgment number.
     #[inline]
     pub fn ack_num_mut(&mut self) -> &mut Field<AckNumSpec> {
         unsafe {
@@ -178,6 +212,7 @@ where
         }
     }
 
+    /// Get the mutable accessor of the data offset.
     #[inline]
     pub fn data_offset_mut(&mut self) -> &mut Field<DataOffsetSpec> {
         unsafe {
@@ -186,6 +221,7 @@ where
         }
     }
 
+    /// Get the mutable accessor of the flags.
     #[inline]
     pub fn flags_mut(&mut self) -> &mut Field<FlagsSpec> {
         unsafe {
@@ -193,6 +229,7 @@ where
         }
     }
 
+    /// Get the mutable accessor of the window size.
     #[inline]
     pub fn window_size_mut(&mut self) -> &mut Field<WindowSizeSpec> {
         unsafe {
@@ -201,6 +238,7 @@ where
         }
     }
 
+    /// Get the mutable accessor of the checksum.
     #[inline]
     pub fn checksum_mut(&mut self) -> &mut Field<ChecksumSpec> {
         unsafe {
@@ -209,6 +247,7 @@ where
         }
     }
 
+    /// Get the mutable accessor of the urgent pointer.
     #[inline]
     pub fn urgent_pointer_mut(&mut self) -> &mut Field<UrgentPointerSpec> {
         unsafe {
@@ -217,12 +256,14 @@ where
         }
     }
 
+    /// Get the mutable options.
     #[inline]
     pub fn options_mut(&mut self) -> &mut [u8] {
         let range = MIN_HEADER_LENGTH..self.data_offset().get() as usize * 4;
         &mut self.data.as_mut()[range]
     }
 
+    /// Get the mutable payload.
     #[inline]
     pub fn payload_mut(&mut self) -> &mut [u8] {
         let range = self.data_offset().get() as usize * 4..;
@@ -232,11 +273,9 @@ where
 
 layer_impl!(Tcp);
 
-#[derive(Clone, Debug)]
-pub struct TcpBuilder<T = Vec<u8>>
-where
-    T: AsRef<[u8]>,
-{
+/// Builder for [`Tcp`].
+#[derive(Clone, Debug, Default)]
+pub struct TcpBuilder {
     src_port: Option<u16>,
     dst_port: Option<u16>,
     seq_num: Option<u32>,
@@ -246,112 +285,89 @@ where
     window_size: Option<u16>,
     checksum: Option<u16>,
     urgent_pointer: Option<u16>,
-    options: Option<T>,
-    payload: Option<T>,
+    options: Vec<u8>,
+    payload: Vec<u8>,
 }
 
-impl<T> Default for TcpBuilder<T>
-where
-    T: AsRef<[u8]>,
-{
-    fn default() -> Self {
-        Self {
-            src_port: None,
-            dst_port: None,
-            seq_num: None,
-            ack_num: None,
-            data_offset: None,
-            flags: None,
-            window_size: None,
-            checksum: None,
-            urgent_pointer: None,
-            options: None,
-            payload: None,
-        }
-    }
-}
-
-impl<T> TcpBuilder<T>
-where
-    T: AsRef<[u8]>,
-{
+impl TcpBuilder {
+    /// Create a new Tcp builder.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the source port.
     pub fn src_port(&mut self, src_port: impl Into<u16>) -> &mut Self {
         self.src_port = Some(src_port.into());
         self
     }
 
+    /// Set the destination port.
     pub fn dst_port(&mut self, dst_port: impl Into<u16>) -> &mut Self {
         self.dst_port = Some(dst_port.into());
         self
     }
 
+    /// Set the sequence number.
     pub fn seq_num(&mut self, seq_num: impl Into<u32>) -> &mut Self {
         self.seq_num = Some(seq_num.into());
         self
     }
 
+    /// Set the acknowledgment number.
     pub fn ack_num(&mut self, ack_num: impl Into<u32>) -> &mut Self {
         self.ack_num = Some(ack_num.into());
         self
     }
 
+    /// Set the data offset.
     pub fn data_offset(&mut self, data_offset: impl Into<u8>) -> &mut Self {
         self.data_offset = Some(data_offset.into());
         self
     }
 
+    /// Set the flags.
     pub fn flags(&mut self, flags: impl Into<u8>) -> &mut Self {
         self.flags = Some(flags.into());
         self
     }
 
+    /// Set the window size.
     pub fn window_size(&mut self, window_size: impl Into<u16>) -> &mut Self {
         self.window_size = Some(window_size.into());
         self
     }
 
+    /// Set the checksum.
     pub fn checksum(&mut self, checksum: impl Into<u16>) -> &mut Self {
         self.checksum = Some(checksum.into());
         self
     }
 
+    /// Set the urgent pointer.
     pub fn urgent_pointer(&mut self, urgent_pointer: impl Into<u16>) -> &mut Self {
         self.urgent_pointer = Some(urgent_pointer.into());
         self
     }
 
-    pub fn options(&mut self, options: T) -> &mut Self {
-        self.options = Some(options);
+    /// Set the options.
+    pub fn options<T: AsRef<[u8]>>(&mut self, options: T) -> &mut Self {
+        self.options.extend_from_slice(options.as_ref());
         self
     }
 
-    pub fn payload(&mut self, payload: T) -> &mut Self {
-        self.payload = Some(payload);
+    /// Set the payload.
+    pub fn payload<T: AsRef<[u8]>>(&mut self, payload: T) -> &mut Self {
+        self.payload.extend_from_slice(payload.as_ref());
         self
     }
 
+    /// Build the Tcp layer.
     pub fn build(&self) -> Tcp<Vec<u8>> {
         // Calculate the data offset
-        let data_offset = self.data_offset.unwrap_or(
-            self.options
-                .as_ref()
-                .map_or(5, |p| p.as_ref().len() as u8 / 4 + 5),
-        );
+        let data_offset = self.data_offset.unwrap_or(self.options.len() as u8 / 4 + 5);
 
-        let mut tcp = unsafe {
-            Tcp::new_unchecked(vec![
-                0;
-                data_offset as usize * 4
-                    + self
-                        .payload
-                        .as_ref()
-                        .map_or(0, |p| p.as_ref().len())
-            ])
-        };
+        let mut tcp =
+            unsafe { Tcp::new_unchecked(vec![0; data_offset as usize * 4 + self.payload.len()]) };
 
         tcp.src_port_mut().set(self.src_port.unwrap_or_default());
         tcp.dst_port_mut().set(self.dst_port.unwrap_or_default());
@@ -364,15 +380,14 @@ where
         tcp.urgent_pointer_mut()
             .set(self.urgent_pointer.unwrap_or_default());
 
-        tcp.options_mut()
-            .copy_from_slice(self.options.as_ref().map_or(&[], |p| p.as_ref()));
-        tcp.payload_mut()
-            .copy_from_slice(self.payload.as_ref().map_or(&[], |p| p.as_ref()));
+        tcp.options_mut().copy_from_slice(self.options.as_ref());
+        tcp.payload_mut().copy_from_slice(self.payload.as_ref());
 
         tcp
     }
 }
 
+/// Create a new Tcp layer with the given fields.
 #[macro_export]
 macro_rules! tcp {
     ($($field : ident : $value : expr),* $(,)?) => {

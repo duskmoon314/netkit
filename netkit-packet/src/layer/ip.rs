@@ -1,3 +1,5 @@
+//! Internet Protocol (IP) layer.
+
 pub mod protocal;
 pub use protocal::IpProtocol;
 

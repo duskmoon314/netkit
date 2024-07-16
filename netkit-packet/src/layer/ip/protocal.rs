@@ -1,8 +1,11 @@
+//! IP Protocol
+
 use num_enum::{FromPrimitive, IntoPrimitive};
 use strum::{AsRefStr, Display, EnumString};
 
 use crate::impl_target;
 
+/// IP Protocol
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
     Debug,
@@ -19,19 +22,23 @@ use crate::impl_target;
 )]
 #[repr(u8)]
 #[non_exhaustive]
+#[allow(missing_docs)]
 pub enum IpProtocol {
     Hopopt = 0,
 
+    /// Internet Control Message Protocol
     Icmp = 1,
 
     Igmp = 2,
 
     Ggp = 3,
 
+    /// Internet Protocol version 4
     Ipv4 = 4,
 
     St = 5,
 
+    /// Transmission Control Protocol
     Tcp = 6,
 
     Cbt = 7,
@@ -54,6 +61,7 @@ pub enum IpProtocol {
 
     Chaos = 16,
 
+    /// User Datagram Protocol
     Udp = 17,
 
     Mux = 18,
@@ -102,6 +110,7 @@ pub enum IpProtocol {
 
     Il = 40,
 
+    /// Internet Protocol version 6
     Ipv6 = 41,
 
     Sdrp = 42,

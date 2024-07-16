@@ -2,8 +2,6 @@
 //!
 //! This module provides a wrapper to access fields in a packet.
 
-pub use paste::paste;
-
 /// Target trait
 ///
 /// This trait is used to convert between the underlay type and the target type.
