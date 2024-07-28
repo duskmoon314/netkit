@@ -17,6 +17,9 @@ netkit-capture = { path = "netkit-capture", version = "0.1.0" }
 num_enum = "0.7.2"
 strum = { version = "0.26.3", features = ["derive"] }
 
+# bitflags
+bitflags = { version = "2.6.0" }
+
 # error helper
 thiserror = "1.0.61"
 

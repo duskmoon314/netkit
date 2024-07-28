@@ -2,6 +2,9 @@
 
 use crate::{field_spec, prelude::*};
 
+pub mod flags;
+pub use flags::*;
+
 /// Error type for Tcp layer.
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]
 pub enum TcpError {
@@ -14,7 +17,7 @@ field_spec!(PortSpec, u16, u16);
 field_spec!(SeqNumSpec, u32, u32);
 field_spec!(AckNumSpec, u32, u32);
 field_spec!(DataOffsetSpec, u8, u8, 0xF0, 4);
-field_spec!(FlagsSpec, u8, u8);
+field_spec!(FlagsSpec, TcpFlags, u8);
 field_spec!(WindowSizeSpec, u16, u16);
 field_spec!(ChecksumSpec, u16, u16);
 field_spec!(UrgentPointerSpec, u16, u16);
@@ -281,7 +284,7 @@ pub struct TcpBuilder {
     seq_num: Option<u32>,
     ack_num: Option<u32>,
     data_offset: Option<u8>,
-    flags: Option<u8>,
+    flags: Option<TcpFlags>,
     window_size: Option<u16>,
     checksum: Option<u16>,
     urgent_pointer: Option<u16>,
@@ -326,7 +329,7 @@ impl TcpBuilder {
     }
 
     /// Set the flags.
-    pub fn flags(&mut self, flags: impl Into<u8>) -> &mut Self {
+    pub fn flags(&mut self, flags: impl Into<TcpFlags>) -> &mut Self {
         self.flags = Some(flags.into());
         self
     }
@@ -399,7 +402,7 @@ macro_rules! tcp {
 
 #[cfg(test)]
 mod tests {
-    use crate::prelude::*;
+    use crate::{layer::tcp::TcpFlags, prelude::*};
 
     #[test]
     fn tcp_new_unchecked() {
@@ -423,7 +426,7 @@ mod tests {
         assert_eq!(tcp.seq_num().get(), 0);
         assert_eq!(tcp.ack_num().get(), 0);
         assert_eq!(tcp.data_offset().get(), 5);
-        assert_eq!(tcp.flags().get(), 2);
+        assert_eq!(tcp.flags().get(), TcpFlags::SYN);
         assert_eq!(tcp.window_size().get(), 8192);
         assert_eq!(tcp.checksum().get(), 0);
         assert_eq!(tcp.urgent_pointer().get(), 0);
@@ -441,7 +444,7 @@ mod tests {
         assert_eq!(tcp.src_port().get(), 80);
         assert_eq!(tcp.dst_port().get(), 96);
         assert_eq!(tcp.data_offset().get(), 5);
-        assert_eq!(tcp.flags().get(), 0);
+        assert_eq!(tcp.flags().get(), TcpFlags::empty());
         assert_eq!(tcp.window_size().get(), 64);
         assert_eq!(tcp.checksum().get(), 0);
         assert_eq!(tcp.urgent_pointer().get(), 0);
