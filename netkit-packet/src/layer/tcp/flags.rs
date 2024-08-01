@@ -47,7 +47,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_tcp_flags() {
+    fn tcp_flags() {
         let flags = TcpFlags::SYN | TcpFlags::ACK;
         assert_eq!(flags, TcpFlags::SYN | TcpFlags::ACK);
         assert_eq!(flags, TcpFlags::from_bits(0b0001_0010).unwrap());
@@ -64,7 +64,7 @@ mod tests {
 
     #[cfg(feature = "serde")]
     #[test]
-    fn test_tcp_flags_serde() {
+    fn tcp_flags_serde() {
         let flags = TcpFlags::SYN | TcpFlags::ACK;
         let serialized = serde_json::to_string(&flags).unwrap();
         assert_eq!(serialized, r#""ACK | SYN""#);
@@ -73,7 +73,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tcp_flags_from_u8() {
+    fn tcp_flags_from_u8() {
         let flags = TcpFlags::SYN | TcpFlags::ACK;
         let value: u8 = flags.into();
         assert_eq!(value, 0b0001_0010);

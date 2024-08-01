@@ -82,21 +82,19 @@ where
     /// Get the accessor of the destination MAC address.
     #[inline]
     pub fn dst(&self) -> &Field<EthAddrSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_DST].as_ptr() as *const Field<EthAddrSpec>) }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_DST])
     }
 
     /// Get the accessor of the source MAC address.
     #[inline]
     pub fn src(&self) -> &Field<EthAddrSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_SRC].as_ptr() as *const Field<EthAddrSpec>) }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_SRC])
     }
 
     /// Get the accessor of the Eth type.
     #[inline]
     pub fn eth_type(&self) -> &Field<EthTypeSpec> {
-        unsafe {
-            &*(self.data.as_ref()[Self::FIELD_ETH_TYPE].as_ptr() as *const Field<EthTypeSpec>)
-        }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_ETH_TYPE])
     }
 
     /// Get the payload.
@@ -128,25 +126,19 @@ where
     /// Get the mutable accessor of the destination MAC address.
     #[inline]
     pub fn dst_mut(&mut self) -> &mut Field<EthAddrSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_DST].as_mut_ptr() as *mut Field<EthAddrSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_DST])
     }
 
     /// Get the mutable accessor of the source MAC address.
     #[inline]
     pub fn src_mut(&mut self) -> &mut Field<EthAddrSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_SRC].as_mut_ptr() as *mut Field<EthAddrSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_SRC])
     }
 
     /// Get the mutable accessor of the Eth type.
     #[inline]
     pub fn eth_type_mut(&mut self) -> &mut Field<EthTypeSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_ETH_TYPE].as_mut_ptr() as *mut Field<EthTypeSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_ETH_TYPE])
     }
 
     /// Get the mutable payload.
@@ -229,8 +221,8 @@ impl EthBuilder {
 
         let mut eth = unsafe { Eth::new_unchecked(vec![0; len]) };
 
-        eth.src_mut().set(self.src.clone().unwrap_or_default());
-        eth.dst_mut().set(self.dst.clone().unwrap_or_default());
+        eth.src_mut().set(self.src.unwrap_or_default());
+        eth.dst_mut().set(self.dst.unwrap_or_default());
         eth.eth_type_mut().set(self.eth_type.unwrap_or_default());
         eth.payload_mut().copy_from_slice(self.payload.as_ref());
 

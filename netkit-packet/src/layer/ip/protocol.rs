@@ -329,15 +329,32 @@ impl_target!(frominto, IpProtocol, u8);
 
 #[cfg(test)]
 mod tests {
+    use crate::{test_enum_num, test_enum_str};
+
     use super::*;
     use std::str::FromStr;
 
     #[test]
-    fn test_ip_protocol() {
-        assert_eq!(IpProtocol::Icmp.to_string(), "Icmp");
-        assert_eq!(IpProtocol::Icmp.as_ref(), "Icmp");
-        assert_eq!(IpProtocol::Icmp.to_string(), "Icmp");
-        assert_eq!(IpProtocol::from(1), IpProtocol::Icmp);
-        assert_eq!(IpProtocol::from_str("Icmp"), Ok(IpProtocol::Icmp));
+    fn ip_protocol_str() {
+        test_enum_str!(
+            IpProtocol,
+            Icmp => "Icmp",
+            Ipv4 => "Ipv4",
+            Tcp => "Tcp",
+            Udp => "Udp",
+            Ipv6 => "Ipv6",
+        );
+    }
+
+    #[test]
+    fn ip_protocol_num() {
+        test_enum_num!(
+            IpProtocol: u8,
+            Icmp => 1,
+            Ipv4 => 4,
+            Tcp => 6,
+            Udp => 17,
+            Ipv6 => 41,
+        );
     }
 }

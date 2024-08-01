@@ -58,6 +58,19 @@ impl_target!(as, u16, u32);
 impl_target!(as, u16, u64);
 impl_target!(as, u32, u64);
 
+impl Target<u8> for bool {
+    fn from_underlay(x: u8) -> Self {
+        x != 0
+    }
+    fn into_underlay(self) -> u8 {
+        if self {
+            1
+        } else {
+            0
+        }
+    }
+}
+
 /// Underlay trait
 ///
 /// This trait marks the types that can be used as underlay for fields and
@@ -211,19 +224,6 @@ macro_rules! impl_underlay {
 impl_underlay!(u8, u16, u32, u64);
 impl_underlay!(3, 5, 6, 7);
 
-/// Endianness trait
-pub trait Endianness {}
-
-/// Most significant byte first (big-endian)
-#[derive(Debug, Clone, Copy)]
-pub struct Msb;
-/// Least significant byte first (little-endian)
-#[derive(Debug, Clone, Copy)]
-pub struct Lsb;
-
-impl Endianness for Msb {}
-impl Endianness for Lsb {}
-
 /// Field specification
 ///
 /// This trait wraps the field specification:
@@ -303,30 +303,34 @@ macro_rules! field_spec {
 /// Field accessor
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
-pub struct Field<F: FieldSpec, E: Endianness = Msb> {
+pub struct Field<F: FieldSpec, const MSB: bool = true> {
     value: F::U,
-    _marker: std::marker::PhantomData<(F::T, E)>,
+    _marker: std::marker::PhantomData<F::T>,
 }
 
-impl<F: FieldSpec, E: Endianness> Field<F, E> {
+impl<F: FieldSpec, const MSB: bool> Field<F, MSB> {
     /// Get the inner value without any operations and conversions
     pub fn into_inner(self) -> F::U {
         self.value
     }
-}
 
-impl<F: FieldSpec> Field<F, Msb> {
     /// Get the **raw** value of the field
     ///
     /// **Note**: raw here means the mask and shift are applied but the value is
     /// not converted to the target type.
     pub fn raw(&self) -> F::U {
-        if F::MASK == u64::MAX && F::SHIFT == 0 {
+        let value = if MSB {
             F::U::from_be(self.value)
-        } else if F::SHIFT == 0 {
-            F::U::from_be(self.value).mask(F::MASK)
         } else {
-            F::U::from_be(self.value).mask(F::MASK).shr(F::SHIFT)
+            F::U::from_le(self.value)
+        };
+
+        if F::MASK == u64::MAX && F::SHIFT == 0 {
+            value
+        } else if F::SHIFT == 0 {
+            value.mask(F::MASK)
+        } else {
+            value.mask(F::MASK).shr(F::SHIFT)
         }
     }
 
@@ -337,57 +341,36 @@ impl<F: FieldSpec> Field<F, Msb> {
 
     /// Set the value of the field
     pub fn set(&mut self, value: F::T) {
-        if F::MASK == u64::MAX && F::SHIFT == 0 {
-            self.value = value.into_underlay().to_be();
-        } else if F::SHIFT == 0 {
-            self.value = F::U::from_be(self.value)
-                .mask(!F::MASK)
-                .bitor(value.into_underlay())
-                .to_be();
+        let prev_value = if MSB {
+            F::U::from_be(self.value)
         } else {
-            self.value = F::U::from_be(self.value)
+            F::U::from_le(self.value)
+        };
+
+        let new_value = if F::MASK == u64::MAX && F::SHIFT == 0 {
+            value.into_underlay()
+        } else if F::SHIFT == 0 {
+            prev_value.mask(!F::MASK).bitor(value.into_underlay())
+        } else {
+            prev_value
                 .mask(!F::MASK)
                 .bitor(value.into_underlay().shl(F::SHIFT))
-                .to_be();
-        }
+        };
+
+        self.value = if MSB {
+            new_value.to_be()
+        } else {
+            new_value.to_le()
+        };
     }
 }
 
-impl<F: FieldSpec> Field<F, Lsb> {
-    /// Get the **raw** value of the field
-    ///
-    /// **Note**: raw here means the mask and shift are applied but the value is
-    /// not converted to the target type.
-    pub fn raw(&self) -> F::U {
-        if F::MASK == u64::MAX && F::SHIFT == 0 {
-            F::U::from_le(self.value)
-        } else if F::SHIFT == 0 {
-            F::U::from_le(self.value).mask(F::MASK)
-        } else {
-            F::U::from_le(self.value).mask(F::MASK).shr(F::SHIFT)
-        }
-    }
-
-    /// Get the value of the field
-    pub fn get(&self) -> F::T {
-        F::T::from_underlay(self.raw())
-    }
-
-    /// Set the value of the field
-    pub fn set(&mut self, value: F::T) {
-        if F::MASK == u64::MAX && F::SHIFT == 0 {
-            self.value = value.into_underlay().to_le();
-        } else if F::SHIFT == 0 {
-            self.value = F::U::from_le(self.value)
-                .mask(!F::MASK)
-                .bitor(value.into_underlay())
-                .to_le();
-        } else {
-            self.value = F::U::from_le(self.value)
-                .mask(!F::MASK)
-                .bitor(value.into_underlay().shl(F::SHIFT))
-                .to_le();
-        }
+impl<F: FieldSpec, const MSB: bool> PartialEq<F::T> for Field<F, MSB>
+where
+    F::T: PartialEq,
+{
+    fn eq(&self, other: &F::T) -> bool {
+        self.get() == *other
     }
 }
 
@@ -405,28 +388,34 @@ mod tests {
         };
         assert_eq!(field.raw(), 0);
         assert_eq!(field.get(), 0);
+        assert_eq!(field, 0);
         field.set(0x0F);
         assert_eq!(field.into_inner(), 0x000F);
         assert_eq!(field.raw(), 0x000F);
         assert_eq!(field.get(), 0x0F);
+        assert_eq!(field, 0x0F);
         field.set(0x0A);
         assert_eq!(field.into_inner(), 0x000A);
         assert_eq!(field.raw(), 0x000A);
         assert_eq!(field.get(), 0x0A);
+        assert_eq!(field, 0x0A);
 
-        let mut field = Field::<TestField, Lsb> {
+        let mut field = Field::<TestField, false> {
             value: 0,
             _marker: std::marker::PhantomData,
         };
         assert_eq!(field.raw(), 0);
         assert_eq!(field.get(), 0);
+        assert_eq!(field, 0);
         field.set(0x0F);
         assert_eq!(field.into_inner(), 0x0F00);
         assert_eq!(field.raw(), 0x000F);
         assert_eq!(field.get(), 0x0F);
+        assert_eq!(field, 0x0F);
         field.set(0x0A);
         assert_eq!(field.into_inner(), 0x0A00);
         assert_eq!(field.raw(), 0x000A);
         assert_eq!(field.get(), 0x0A);
+        assert_eq!(field, 0x0A);
     }
 }

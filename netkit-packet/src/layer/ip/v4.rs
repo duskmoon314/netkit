@@ -113,92 +113,79 @@ where
     /// Get the accessor of the version.
     #[inline]
     pub fn version(&self) -> &Field<VersionSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_VERSION].as_ptr() as *const Field<VersionSpec>) }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_VERSION])
     }
 
     /// Get the accessor of the ihl.
     #[inline]
     pub fn ihl(&self) -> &Field<IhlSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_IHL].as_ptr() as *const Field<IhlSpec>) }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_IHL])
     }
 
     /// Get the accessor of the dscp.
     #[inline]
     pub fn dscp(&self) -> &Field<DscpSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_DSCP].as_ptr() as *const Field<DscpSpec>) }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_DSCP])
     }
 
     /// Get the accessor of the ecn.
     #[inline]
     pub fn ecn(&self) -> &Field<EcnSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_ECN].as_ptr() as *const Field<EcnSpec>) }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_ECN])
     }
 
     /// Get the accessor of the total length.
     #[inline]
     pub fn total_length(&self) -> &Field<TotalLengthSpec> {
-        unsafe {
-            &*(self.data.as_ref()[Self::FIELD_TOTAL_LENGTH].as_ptr()
-                as *const Field<TotalLengthSpec>)
-        }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_TOTAL_LENGTH])
     }
 
     /// Get the accessor of the identification.
     #[inline]
     pub fn identification(&self) -> &Field<IdentificationSpec> {
-        unsafe {
-            &*(self.data.as_ref()[Self::FIELD_IDENTIFICATION].as_ptr()
-                as *const Field<IdentificationSpec>)
-        }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_IDENTIFICATION])
     }
 
     /// Get the accessor of the flags.
     #[inline]
     pub fn flags(&self) -> &Field<FlagsSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_FLAGS].as_ptr() as *const Field<FlagsSpec>) }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_FLAGS])
     }
 
     /// Get the accessor of the fragment offset.
     #[inline]
     pub fn fragment_offset(&self) -> &Field<FragmentOffsetSpec> {
-        unsafe {
-            &*(self.data.as_ref()[Self::FIELD_FRAGMENT_OFFSET].as_ptr()
-                as *const Field<FragmentOffsetSpec>)
-        }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_FRAGMENT_OFFSET])
     }
 
     /// Get the accessor of the ttl.
     #[inline]
     pub fn ttl(&self) -> &Field<TtlSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_TTL].as_ptr() as *const Field<TtlSpec>) }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_TTL])
     }
 
     /// Get the accessor of the protocol.
     #[inline]
     pub fn protocol(&self) -> &Field<ProtocolSpec> {
-        unsafe {
-            &*(self.data.as_ref()[Self::FIELD_PROTOCOL].as_ptr() as *const Field<ProtocolSpec>)
-        }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_PROTOCOL])
     }
 
     /// Get the accessor of the checksum.
     #[inline]
     pub fn checksum(&self) -> &Field<ChecksumSpec> {
-        unsafe {
-            &*(self.data.as_ref()[Self::FIELD_CHECKSUM].as_ptr() as *const Field<ChecksumSpec>)
-        }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_CHECKSUM])
     }
 
     /// Get the accessor of the src ip address.
     #[inline]
     pub fn src(&self) -> &Field<Ipv4AddrSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_SRC].as_ptr() as *const Field<Ipv4AddrSpec>) }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_SRC])
     }
 
     /// Get the accessor of the dst ip address.
     #[inline]
     pub fn dst(&self) -> &Field<Ipv4AddrSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_DST].as_ptr() as *const Field<Ipv4AddrSpec>) }
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_DST])
     }
 
     /// Get the options.
@@ -245,102 +232,79 @@ where
     /// Get the mutable accessor of the version.
     #[inline]
     pub fn version_mut(&mut self) -> &mut Field<VersionSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_VERSION].as_mut_ptr() as *mut Field<VersionSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_VERSION])
     }
 
     /// Get the mutable accessor of the ihl.
     #[inline]
     pub fn ihl_mut(&mut self) -> &mut Field<IhlSpec> {
-        unsafe { &mut *(self.data.as_mut()[Self::FIELD_IHL].as_mut_ptr() as *mut Field<IhlSpec>) }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_IHL])
     }
 
     /// Get the mutable accessor of the dscp.
     #[inline]
     pub fn dscp_mut(&mut self) -> &mut Field<DscpSpec> {
-        unsafe { &mut *(self.data.as_mut()[Self::FIELD_DSCP].as_mut_ptr() as *mut Field<DscpSpec>) }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_DSCP])
     }
 
     /// Get the mutable accessor of the ecn.
     #[inline]
     pub fn ecn_mut(&mut self) -> &mut Field<EcnSpec> {
-        unsafe { &mut *(self.data.as_mut()[Self::FIELD_ECN].as_mut_ptr() as *mut Field<EcnSpec>) }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_ECN])
     }
 
     /// Get the mutable accessor of the total length.
     #[inline]
     pub fn total_length_mut(&mut self) -> &mut Field<TotalLengthSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_TOTAL_LENGTH].as_mut_ptr()
-                as *mut Field<TotalLengthSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_TOTAL_LENGTH])
     }
 
     /// Get the mutable accessor of the identification.
     #[inline]
     pub fn identification_mut(&mut self) -> &mut Field<IdentificationSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_IDENTIFICATION].as_mut_ptr()
-                as *mut Field<IdentificationSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_IDENTIFICATION])
     }
 
     /// Get the mutable accessor of the flags.
     #[inline]
     pub fn flags_mut(&mut self) -> &mut Field<FlagsSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_FLAGS].as_mut_ptr() as *mut Field<FlagsSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_FLAGS])
     }
 
     /// Get the mutable accessor of the fragment offset.
     #[inline]
     pub fn fragment_offset_mut(&mut self) -> &mut Field<FragmentOffsetSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_FRAGMENT_OFFSET].as_mut_ptr()
-                as *mut Field<FragmentOffsetSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_FRAGMENT_OFFSET])
     }
 
     /// Get the mutable accessor of the ttl.
     #[inline]
     pub fn ttl_mut(&mut self) -> &mut Field<TtlSpec> {
-        unsafe { &mut *(self.data.as_mut()[Self::FIELD_TTL].as_mut_ptr() as *mut Field<TtlSpec>) }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_TTL])
     }
 
     /// Get the mutable accessor of the protocol.
     #[inline]
     pub fn protocol_mut(&mut self) -> &mut Field<ProtocolSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_PROTOCOL].as_mut_ptr()
-                as *mut Field<ProtocolSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_PROTOCOL])
     }
 
     /// Get the mutable accessor of the checksum.
     #[inline]
     pub fn checksum_mut(&mut self) -> &mut Field<ChecksumSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_CHECKSUM].as_mut_ptr()
-                as *mut Field<ChecksumSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_CHECKSUM])
     }
 
     /// Get the mutable accessor of the src ip address.
     #[inline]
     pub fn src_mut(&mut self) -> &mut Field<Ipv4AddrSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_SRC].as_mut_ptr() as *mut Field<Ipv4AddrSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_SRC])
     }
 
     /// Get the mutable accessor of the dst ip address.
     #[inline]
     pub fn dst_mut(&mut self) -> &mut Field<Ipv4AddrSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_DST].as_mut_ptr() as *mut Field<Ipv4AddrSpec>)
-        }
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_DST])
     }
 
     /// Get the mutable options.

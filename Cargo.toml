@@ -14,7 +14,7 @@ netkit-packet = { path = "netkit-packet", version = "0.1.0" }
 netkit-capture = { path = "netkit-capture", version = "0.1.0" }
 
 # enum helper
-num_enum = "0.7.2"
+num_enum = { version = "0.7.3" }
 strum = { version = "0.26.3", features = ["derive"] }
 
 # bitflags

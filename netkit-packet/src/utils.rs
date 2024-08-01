@@ -1,8 +1,17 @@
 //! Utilitie types and functions for netkit-packet.
 
 pub mod field;
+pub mod test_enum;
 
 pub use field::*;
+
+pub(crate) fn cast_from_bytes<T>(s: &[u8]) -> &T {
+    unsafe { &*(s.as_ptr() as *const T) }
+}
+
+pub(crate) fn cast_from_bytes_mut<T>(s: &mut [u8]) -> &mut T {
+    unsafe { &mut *(s.as_mut_ptr() as *mut T) }
+}
 
 macro_rules! layer_impl {
     ($name : ident) => {
