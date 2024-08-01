@@ -1,5 +1,6 @@
 //! The implementation of various network layers.
 
+pub mod dns;
 pub mod eth;
 pub mod ip;
 pub mod tcp;
