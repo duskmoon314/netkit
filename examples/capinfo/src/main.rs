@@ -105,7 +105,7 @@ fn info(file_path: PathBuf, args: &Flags) -> anyhow::Result<()> {
             if let Some(tcp) = ip.tcp() {
                 src_port.push(tcp.src_port().get());
                 dst_port.push(tcp.dst_port().get());
-                tcp_flags.push(tcp.flags().get());
+                tcp_flags.push(tcp.flags().raw());
             } else if let Some(udp) = ip.udp() {
                 src_port.push(udp.src_port().get());
                 dst_port.push(udp.dst_port().get());
