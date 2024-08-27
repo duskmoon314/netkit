@@ -1,26 +1,7 @@
-use std::io::Cursor;
-
 use criterion::{criterion_group, criterion_main, Criterion};
-// use deku::DekuReader;
 use pprof::criterion::{Output, PProfProfiler};
 
 use netkit_packet::prelude::*;
-
-// const OPTS_SKIP_ETH_PAYLOAD: LayerOpts = LayerOpts {
-//     skip_raw: false,
-//     skip_eth_payload: true,
-//     skip_ip_payload: false,
-//     skip_tcp_payload: false,
-//     skip_udp_payload: false,
-// };
-
-// const OPTS_SKIP_IP_PAYLOAD: LayerOpts = LayerOpts {
-//     skip_raw: false,
-//     skip_eth_payload: false,
-//     skip_ip_payload: true,
-//     skip_tcp_payload: false,
-//     skip_udp_payload: false,
-// };
 
 const DATA: [u8; 46] = [
     0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // dst mac
@@ -42,14 +23,6 @@ const DATA: [u8; 46] = [
     0x01, 0x02, 0x03, 0x04, // payload
 ];
 
-// fn deku_read<T: for<'a> DekuReader<'a, Ctx>, Ctx>(
-//     mut reader: impl deku::no_std_io::Read,
-//     ctx: Ctx,
-// ) {
-//     let mut reader = deku::reader::Reader::new(&mut reader);
-//     let _v = T::from_reader_with_ctx(&mut reader, ctx).unwrap();
-// }
-
 fn read_eth(c: &mut Criterion) {
     c.bench_function("read_eth_mac_addr", |b| {
         b.iter_batched(
@@ -69,7 +42,7 @@ fn read_eth(c: &mut Criterion) {
 
     c.bench_function("read_eth_no_payload", |b| {
         b.iter_batched(
-            || DATA.as_ref(),
+            || &DATA[0..14],
             |data| Eth::new(data),
             criterion::BatchSize::SmallInput,
         )
@@ -77,38 +50,12 @@ fn read_eth(c: &mut Criterion) {
 
     c.bench_function("read_eth_ip_no_payload", |b| {
         b.iter_batched(
-            || DATA,
+            || &DATA[0..34],
             |data| Eth::new(data),
             criterion::BatchSize::SmallInput,
         )
     });
 }
-
-// fn read_ip(c: &mut Criterion) {
-//     c.bench_function("read_ip_protocol", |b| {
-//         b.iter_batched(
-//             || Cursor::new(&DATA[9..10]),
-//             |data| deku_read::<IpProtocol, ()>(data, ()),
-//             criterion::BatchSize::SmallInput,
-//         )
-//     });
-
-//     c.bench_function("read_ip_addr", |b| {
-//         b.iter_batched(
-//             || Cursor::new(&DATA[12..16]),
-//             |data| deku_read::<Ipv4Addr, ()>(data, ()),
-//             criterion::BatchSize::SmallInput,
-//         )
-//     });
-
-//     c.bench_function("read_ip_no_payload", |b| {
-//         b.iter_batched(
-//             || DATA[14..].as_ref(),
-//             |data| Ipv4::from_reader(data, OPTS_SKIP_IP_PAYLOAD),
-//             criterion::BatchSize::SmallInput,
-//         )
-//     });
-// }
 
 criterion_group! {
     name = benches;
