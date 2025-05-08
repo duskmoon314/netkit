@@ -16,13 +16,12 @@ fn main() -> anyhow::Result<()> {
 
     let file = std::fs::File::open(&args.pcap_file)?;
 
-    let mut reader = PcapReader::new(file);
+    let reader = PcapReader::new(file);
 
     println!("Global header: {:#x?}", reader.header);
 
-    while let Some((hdr, data)) = reader.next_packet() {
+    for (hdr, data) in reader {
         println!("Packet: {:?}", hdr);
-        // println!("Data: {:?}", data);
 
         let packet = Eth::new(data).unwrap();
         println!("Packet: {:?}", packet);
