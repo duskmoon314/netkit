@@ -107,6 +107,8 @@ where
     pub fn ipv4(&self) -> Option<Ipv4<&[u8]>> {
         if self.eth_type().get() == EthType::Ipv4 {
             Ipv4::new(self.payload()).ok()
+        } else if self.eth_type().get() == EthType::Vlan {
+            Ipv4::new(&self.payload()[Vlan::<&[u8]>::FIELD_PAYLOAD]).ok()
         } else {
             None
         }
@@ -151,6 +153,8 @@ where
     pub fn ipv4_mut(&mut self) -> Option<Ipv4<&mut [u8]>> {
         if self.eth_type().get() == EthType::Ipv4 {
             Ipv4::new(self.payload_mut()).ok()
+        } else if self.eth_type().get() == EthType::Vlan {
+            Ipv4::new(&mut self.payload_mut()[Vlan::<&mut [u8]>::FIELD_PAYLOAD]).ok()
         } else {
             None
         }
@@ -369,5 +373,36 @@ mod tests {
             format!("{:?}", eth),
             "Eth { dst: 01:23:45:67:89:AB, src: CD:EF:01:23:45:67, eth_type: Ipv4 }"
         );
+    }
+
+    #[test]
+    fn eth_vlan_ipv4() {
+        let data: [u8; 50] = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // dst mac
+            0x06, 0x05, 0x04, 0x03, 0x02, 0x01, // src mac
+            0x81, 0x00, // eth type vlan
+            0x01, 0x23, // pcp 0, dei 0, vlan id 0x123 (291)
+            0x08, 0x00, // eth type ipv4
+            0x45, // version 4, ihl 5
+            0x00, // dscp 0, ecn 0
+            0x00, 0x20, // total length 20 + 8 + 4 = 32
+            0x00, 0x00, // identification 0
+            0x00, 0x00, // flags 0, fragment offset 0
+            0x40, // ttl 64
+            0x11, // protocol udp
+            0x00, 0x00, // checksum 0 (TODO: check this)
+            0x7f, 0x00, 0x00, 0x01, // src ip
+            0x7f, 0x00, 0x00, 0x02, // dst ip
+            0x04, 0xd2, 0x04, 0xd3, // src port 1234, dst port 1235
+            0x00, 0x0c, // length 12
+            0x00, 0x00, // checksum 0 (TODO: check this)
+            0x01, 0x02, 0x03, 0x04, // payload
+        ];
+
+        let eth = Eth::new(data).unwrap();
+
+        let ipv4 = eth.ipv4().unwrap();
+        assert_eq!(ipv4.ihl().get(), 5);
+        assert_eq!(ipv4.protocol().get(), IpProtocol::Udp);
     }
 }
