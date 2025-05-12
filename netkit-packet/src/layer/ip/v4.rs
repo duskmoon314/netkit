@@ -19,6 +19,7 @@ field_spec!(VersionSpec, u8, u8, 0xF0, 4);
 field_spec!(IhlSpec, u8, u8, 0x0F);
 field_spec!(DscpSpec, u8, u8, 0xFC, 2);
 field_spec!(EcnSpec, u8, u8, 0x03);
+field_spec!(TosSpec, u8, u8);
 field_spec!(TotalLengthSpec, u16, u16);
 field_spec!(IdentificationSpec, u16, u16);
 field_spec!(FlagsSpec, u8, u8, 0xE0, 5);
@@ -48,6 +49,8 @@ where
     pub const FIELD_DSCP: core::ops::Range<usize> = 1..2;
     /// Field range of the ecn: 1..2 (2bits)
     pub const FIELD_ECN: core::ops::Range<usize> = 1..2;
+    /// Field range of the tos: 1..2
+    pub const FIELD_TOS: core::ops::Range<usize> = 1..2;
     /// Field range of the total length: 2..4
     pub const FIELD_TOTAL_LENGTH: core::ops::Range<usize> = 2..4;
     /// Field range of the identification: 4..6
@@ -132,6 +135,12 @@ where
     #[inline]
     pub fn ecn(&self) -> &Field<EcnSpec> {
         cast_from_bytes(&self.data.as_ref()[Self::FIELD_ECN])
+    }
+
+    /// Get the accessor of the tos.
+    #[inline]
+    pub fn tos(&self) -> &Field<TosSpec> {
+        cast_from_bytes(&self.data.as_ref()[Self::FIELD_TOS])
     }
 
     /// Get the accessor of the total length.
@@ -251,6 +260,12 @@ where
     #[inline]
     pub fn ecn_mut(&mut self) -> &mut Field<EcnSpec> {
         cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_ECN])
+    }
+
+    /// Get the mutable accessor of the tos.
+    #[inline]
+    pub fn tos_mut(&mut self) -> &mut Field<TosSpec> {
+        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_TOS])
     }
 
     /// Get the mutable accessor of the total length.
