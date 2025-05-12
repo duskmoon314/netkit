@@ -108,7 +108,7 @@ where
         if self.eth_type().get() == EthType::Ipv4 {
             Ipv4::new(self.payload()).ok()
         } else if self.eth_type().get() == EthType::Vlan {
-            Ipv4::new(&self.payload()[Vlan::<&[u8]>::FIELD_PAYLOAD]).ok()
+            Vlan::<&[u8]>::ipv4_from_bytes(self.payload())
         } else {
             None
         }
@@ -154,7 +154,7 @@ where
         if self.eth_type().get() == EthType::Ipv4 {
             Ipv4::new(self.payload_mut()).ok()
         } else if self.eth_type().get() == EthType::Vlan {
-            Ipv4::new(&mut self.payload_mut()[Vlan::<&mut [u8]>::FIELD_PAYLOAD]).ok()
+            Vlan::<&mut [u8]>::ipv4_mut_from_bytes(self.payload_mut())
         } else {
             None
         }
@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn eth_vlan_ipv4() {
-        let data: [u8; 50] = [
+        let mut data: [u8; 50] = [
             0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // dst mac
             0x06, 0x05, 0x04, 0x03, 0x02, 0x01, // src mac
             0x81, 0x00, // eth type vlan
@@ -399,10 +399,39 @@ mod tests {
             0x01, 0x02, 0x03, 0x04, // payload
         ];
 
-        let eth = Eth::new(data).unwrap();
+        let mut eth = Eth::new(&mut data).unwrap();
 
-        let ipv4 = eth.ipv4().unwrap();
+        let mut ipv4 = eth.ipv4_mut().unwrap();
         assert_eq!(ipv4.ihl().get(), 5);
         assert_eq!(ipv4.protocol().get(), IpProtocol::Udp);
+
+        ipv4.protocol_mut().set(IpProtocol::Tcp);
+
+        assert_eq!(ipv4.protocol().get(), IpProtocol::Tcp);
+
+        assert_eq!(
+            data,
+            [
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // dst mac
+                0x06, 0x05, 0x04, 0x03, 0x02, 0x01, // src mac
+                0x81, 0x00, // eth type vlan
+                0x01, 0x23, // pcp 0, dei 0, vlan id 0x123 (291)
+                0x08, 0x00, // eth type ipv4
+                0x45, // version 4, ihl 5
+                0x00, // dscp 0, ecn 0
+                0x00, 0x20, // total length 20 + 8 + 4 = 32
+                0x00, 0x00, // identification 0
+                0x00, 0x00, // flags 0, fragment offset 0
+                0x40, // ttl 64
+                0x06, // protocol tcp
+                0x00, 0x00, // checksum (TODO: check this)
+                0x7f, 0x00, 0x00, 0x01, // src ip
+                0x7f, 0x00, 0x00, 0x02, // dst ip
+                0x04, 0xd2, 0x04, 0xd3, // src port 1234, dst port 1235
+                0x00, 0x0c, // length 12
+                0x00, 0x00, // checksum 0 (TODO: check this)
+                0x01, 0x02, 0x03, 0x04, // payload
+            ]
+        );
     }
 }
