@@ -139,7 +139,7 @@ where
     }
 
     /// Get the IPv4 layer from the given bytes if the Eth type is IPv4.
-    pub fn ipv4_from_bytes<'a>(bytes: &'a [u8]) -> Option<Ipv4<&'a [u8]>> {
+    pub fn ipv4_from_bytes(bytes: &[u8]) -> Option<Ipv4<&[u8]>> {
         let vlan = Vlan::new(bytes).ok()?;
         if vlan.eth_type().get() == EthType::Ipv4 {
             Ipv4::new(&bytes[Vlan::<&[u8]>::FIELD_PAYLOAD]).ok()
@@ -205,7 +205,7 @@ where
     }
 
     /// Get the mutable IPv4 layer from the given bytes if the Eth type is IPv4.
-    pub fn ipv4_mut_from_bytes<'a>(bytes: &'a mut [u8]) -> Option<Ipv4<&'a mut [u8]>> {
+    pub fn ipv4_mut_from_bytes(bytes: &mut [u8]) -> Option<Ipv4<&mut [u8]>> {
         let vlan = Vlan::new(&mut *bytes).ok()?;
         if vlan.eth_type().get() == EthType::Ipv4 {
             Ipv4::new(&mut bytes[Vlan::<&mut [u8]>::FIELD_PAYLOAD]).ok()

@@ -3,7 +3,7 @@
 members = ["netkit-packet", "netkit-capture", "examples/*"]
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 authors = ["duskmoon (Campbell He) <kp.campbell.he@duskmoon314.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/duskmoon314/netkit"
@@ -15,21 +15,21 @@ netkit-capture = { path = "netkit-capture", version = "0.1.0" }
 
 # enum helper
 num_enum = { version = "0.7.3" }
-strum = { version = "0.26.3", features = ["derive"] }
+strum = { version = "0.27.1", features = ["derive"] }
 
 # bitflags
-bitflags = { version = "2.6.0" }
+bitflags = { version = "2.9.0" }
 
 # error helper
-thiserror = "1.0.61"
+thiserror = "2.0.12"
 
 # serde
-serde = { version = "1.0.204", features = ["derive"] }
-serde_json = "1.0.120"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
 
 # benchmark
 criterion = "0.5.1"
-pprof = { version = "0.13.0", features = [
+pprof = { version = "0.14.0", features = [
     "flamegraph",
     "prost-codec",
     "criterion",
