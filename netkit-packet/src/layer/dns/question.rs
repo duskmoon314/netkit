@@ -3,7 +3,7 @@
 use crate::field_spec;
 use crate::prelude::*;
 
-use super::{class::DnsClass, rrtype::DnsRrType, DnsName};
+use super::{DnsName, class::DnsClass, rrtype::DnsRrType};
 
 /// Error type of DnsQuestion
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]

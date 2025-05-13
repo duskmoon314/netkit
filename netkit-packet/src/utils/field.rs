@@ -63,11 +63,7 @@ impl Target<u8> for bool {
         x != 0
     }
     fn into_underlay(self) -> u8 {
-        if self {
-            1
-        } else {
-            0
-        }
+        if self { 1 } else { 0 }
     }
 }
 
