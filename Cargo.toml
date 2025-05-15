@@ -10,8 +10,16 @@ repository = "https://github.com/duskmoon314/netkit"
 keywords = ["network", "packet"]
 
 [workspace.dependencies]
+netkit = { path = "." }
 netkit-packet = { path = "netkit-packet", version = "0.1.0" }
 netkit-capture = { path = "netkit-capture", version = "0.1.0" }
+
+# CLI
+clap = { version = "4.5.38", features = ["derive"] }
+
+# Logging
+log = "0.4.27"
+env_logger = "0.11.8"
 
 # enum helper
 num_enum = { version = "0.7.3" }
@@ -21,6 +29,7 @@ strum = { version = "0.27.1", features = ["derive"] }
 bitflags = { version = "2.9.0" }
 
 # error helper
+anyhow = "1.0.95"
 thiserror = "2.0.12"
 
 # serde

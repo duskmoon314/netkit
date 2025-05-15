@@ -1,6 +1,6 @@
 use std::{
     cmp::min,
-    io::{BufReader, Read},
+    io::{BufReader, BufWriter, Read, Write},
 };
 
 // use deku::prelude::*;
@@ -150,4 +150,106 @@ pub struct PacketHeader {
 
     /// Actual length of packet
     pub orig_len: u32,
+}
+
+#[derive(Debug)]
+pub struct PcapWriter<W: Write> {
+    pub header: PcapHeader,
+
+    pub big_endian: bool,
+
+    pub nano_seconds: bool,
+
+    writer: BufWriter<W>,
+}
+
+impl<W: Write> PcapWriter<W> {
+    pub fn new(
+        writer: W,
+        big_endian: bool,
+        nano_seconds: bool,
+        snaplen: u32,
+    ) -> Result<Self, std::io::Error> {
+        let mut writer = BufWriter::new(writer);
+
+        let magic_number: u32 = match (big_endian, nano_seconds) {
+            (true, false) => 0xA1B2C3D4,
+            (true, true) => 0xA1B23C4D,
+            (false, false) => 0xD4C3B2A1,
+            (false, true) => 0x4D3CB2A1,
+        };
+
+        let header = PcapHeader {
+            magic_number,
+            version_major: 2,
+            version_minor: 4,
+            thiszone: 0,
+            sigfigs: 0,
+            snaplen,
+            network: 1, // Ethernet
+        };
+
+        // Write the header
+        let mut buffer = Vec::new();
+        if big_endian {
+            buffer.extend_from_slice(&magic_number.to_be_bytes());
+            buffer.extend_from_slice(&header.version_major.to_be_bytes());
+            buffer.extend_from_slice(&header.version_minor.to_be_bytes());
+            buffer.extend_from_slice(&header.thiszone.to_be_bytes());
+            buffer.extend_from_slice(&header.sigfigs.to_be_bytes());
+            buffer.extend_from_slice(&header.snaplen.to_be_bytes());
+            buffer.extend_from_slice(&header.network.to_be_bytes());
+        } else {
+            buffer.extend_from_slice(&magic_number.to_le_bytes());
+            buffer.extend_from_slice(&header.version_major.to_le_bytes());
+            buffer.extend_from_slice(&header.version_minor.to_le_bytes());
+            buffer.extend_from_slice(&header.thiszone.to_le_bytes());
+            buffer.extend_from_slice(&header.sigfigs.to_le_bytes());
+            buffer.extend_from_slice(&header.snaplen.to_le_bytes());
+            buffer.extend_from_slice(&header.network.to_le_bytes());
+        }
+
+        writer.write_all(&buffer)?;
+
+        Ok(Self {
+            header,
+            big_endian,
+            nano_seconds,
+            writer,
+        })
+    }
+
+    pub fn write_packet<T: AsRef<[u8]>>(
+        &mut self,
+        header: PacketHeader,
+        data: T,
+    ) -> Result<(), std::io::Error> {
+        let mut buffer = Vec::new();
+
+        let mut header = header;
+
+        header.incl_len = min(header.incl_len, self.header.snaplen);
+
+        if self.big_endian {
+            buffer.extend_from_slice(&header.ts_sec.to_be_bytes());
+            buffer.extend_from_slice(&header.ts_usec.to_be_bytes());
+            buffer.extend_from_slice(&header.incl_len.to_be_bytes());
+            buffer.extend_from_slice(&header.orig_len.to_be_bytes());
+        } else {
+            buffer.extend_from_slice(&header.ts_sec.to_le_bytes());
+            buffer.extend_from_slice(&header.ts_usec.to_le_bytes());
+            buffer.extend_from_slice(&header.incl_len.to_le_bytes());
+            buffer.extend_from_slice(&header.orig_len.to_le_bytes());
+        }
+
+        buffer.extend_from_slice(&data.as_ref()[..header.incl_len as usize]);
+
+        self.writer.write_all(&buffer)?;
+
+        Ok(())
+    }
+
+    pub fn flush(&mut self) -> Result<(), std::io::Error> {
+        self.writer.flush()
+    }
 }
