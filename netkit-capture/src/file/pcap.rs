@@ -200,7 +200,7 @@ impl<W: Write> PcapWriter<W> {
             buffer.extend_from_slice(&header.snaplen.to_be_bytes());
             buffer.extend_from_slice(&header.network.to_be_bytes());
         } else {
-            buffer.extend_from_slice(&magic_number.to_le_bytes());
+            buffer.extend_from_slice(&magic_number.to_be_bytes()); // The magic number is already in right endianness
             buffer.extend_from_slice(&header.version_major.to_le_bytes());
             buffer.extend_from_slice(&header.version_minor.to_le_bytes());
             buffer.extend_from_slice(&header.thiszone.to_le_bytes());
