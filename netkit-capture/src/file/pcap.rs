@@ -229,6 +229,7 @@ impl<W: Write> PcapWriter<W> {
         let mut header = header;
 
         header.incl_len = min(header.incl_len, self.header.snaplen);
+        header.incl_len = min(header.incl_len, data.as_ref().len() as u32);
 
         if self.big_endian {
             buffer.extend_from_slice(&header.ts_sec.to_be_bytes());
