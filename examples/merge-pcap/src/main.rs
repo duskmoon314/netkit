@@ -1,8 +1,10 @@
-use std::{collections::BinaryHeap, fs::File, path::PathBuf};
+use std::{collections::BinaryHeap, fs::File, path::PathBuf, time::Duration};
 
 use anyhow::anyhow;
 
 use clap::Parser;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif_log_bridge::LogWrapper;
 use log::{debug, info};
 use netkit::capture::file::pcap::{PacketHeader, PcapReader, PcapWriter};
 use serde::Deserialize;
@@ -37,6 +39,9 @@ struct Cli {
     ///
     /// When present in cli arguments, only the path is supported. If more
     /// options are needed, please use the config file.
+    ///
+    /// The pcap files should be in order, otherwise the output pcap may not be
+    /// correct.
     #[arg(value_parser = InputFile::parse)]
     input_files: Vec<InputFile>,
 
@@ -97,12 +102,12 @@ impl InputFile {
 
         Ok(InputFile {
             path,
-            start_time: vec![],
+            start_time: vec![0],
             repeat: 1,
         })
     }
 
-    fn into_iter(&self, cli: &Cli) -> InputFileIterator {
+    fn into_iter(self, cli: &Cli, pg: ProgressBar) -> InputFileIterator {
         let reader = PcapReader::new(File::open(&self.path).unwrap());
 
         InputFileIterator {
@@ -116,10 +121,12 @@ impl InputFile {
             last_packet_time: (0, 0),
             nano_seconds: cli.nano_seconds.unwrap_or(false),
             erase_timestamp: cli.erase_timestamp.unwrap_or(false),
+            pg,
         }
     }
 }
 
+#[derive(Debug)]
 struct InputFileIterator {
     path: PathBuf,
     reader: PcapReader<File>,
@@ -131,6 +138,7 @@ struct InputFileIterator {
     last_packet_time: (u32, u32),
     nano_seconds: bool,
     erase_timestamp: bool,
+    pg: ProgressBar,
 }
 
 impl Iterator for InputFileIterator {
@@ -144,6 +152,9 @@ impl Iterator for InputFileIterator {
                     self.current += 1;
 
                     if self.current == self.start_time.len() as u32 * self.repeat {
+                        self.pg
+                            .finish_with_message(format!("{} done", self.path.display()));
+
                         return None;
                     }
 
@@ -208,10 +219,12 @@ impl Iterator for InputFileIterator {
         self.last_packet_time = (item.0.ts_sec, item.0.ts_usec);
 
         match (self.nano_seconds, self.reader.nano_seconds) {
-            (true, false) => item.0.ts_usec /= 1000,
-            (false, true) => item.0.ts_usec *= 1000,
+            (true, false) => item.0.ts_usec *= 1000,
+            (false, true) => item.0.ts_usec /= 1000,
             _ => {}
         }
+
+        self.pg.inc(1);
 
         Some(item)
     }
@@ -226,17 +239,7 @@ struct PacketHeapItem {
 
 impl PartialOrd for PacketHeapItem {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if self.header.ts_sec == other.header.ts_sec {
-            self.header
-                .ts_usec
-                .partial_cmp(&other.header.ts_usec)
-                .map(|o| o.reverse())
-        } else {
-            self.header
-                .ts_sec
-                .partial_cmp(&other.header.ts_sec)
-                .map(|o| o.reverse())
-        }
+        Some(self.cmp(other))
     }
 }
 
@@ -251,14 +254,30 @@ impl Ord for PacketHeapItem {
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    // env_logger::builder()
+    //     .filter_level(log::LevelFilter::Info)
+    //     .parse_default_env()
+    //     .init();
+
+    let logger = env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
+        .build();
+    let level = logger.filter();
+
+    let multi = MultiProgress::new();
+    LogWrapper::new(multi.clone(), logger).try_init()?;
+    log::set_max_level(level);
+    let pg_style = ProgressStyle::with_template(
+        "{prefix:3} [{elapsed_precise}] {human_pos:>12} pkts    {msg}",
+    )?;
 
     let mut args = Cli::parse();
 
     if let Some(ref config_file) = args.config_file {
         match config_file.extension() {
             Some(ext) if ext == "json" => {
-                let config = std::fs::read_to_string(&config_file)?;
+                let config = std::fs::read_to_string(config_file)?;
                 let config: Cli = serde_json::from_str(&config)?;
 
                 args.merge_config(&config);
@@ -278,14 +297,26 @@ fn main() -> anyhow::Result<()> {
 
     debug!("Parsed arguments: {args:?}");
 
+    let start = std::time::Instant::now();
+
     let output_file = args.output_file.clone().expect("Output file is required");
+
+    let write_pg = multi.add(ProgressBar::no_length());
+    write_pg.set_style(pg_style.clone());
+    write_pg.set_prefix("OUT");
+    write_pg.set_message(output_file.display().to_string());
+    write_pg.enable_steady_tick(Duration::from_secs(1));
 
     let mut output_file = std::fs::File::create(&output_file)
         .map_err(|e| anyhow!("Failed to create output file: {}", e))?;
 
-    let mut pcap_writer =
-        PcapWriter::new(&mut output_file, false, true, args.snaplen.unwrap_or(65535))
-            .map_err(|e| anyhow!("Failed to create pcap writer: {}", e))?;
+    let mut pcap_writer = PcapWriter::new(
+        &mut output_file,
+        false,
+        args.nano_seconds.unwrap_or(false),
+        args.snaplen.unwrap_or(65535),
+    )
+    .map_err(|e| anyhow!("Failed to create pcap writer: {}", e))?;
 
     let mut packet_heap: BinaryHeap<PacketHeapItem> =
         BinaryHeap::with_capacity(args.input_files.len());
@@ -293,7 +324,15 @@ fn main() -> anyhow::Result<()> {
     let mut input_files = args
         .input_files
         .iter()
-        .map(|input_file| input_file.into_iter(&args))
+        .map(|input_file| {
+            let pg = multi.add(ProgressBar::no_length());
+            pg.set_style(pg_style.clone());
+            pg.set_prefix("IN");
+            pg.set_message(input_file.path.display().to_string());
+            pg.enable_steady_tick(Duration::from_secs(1));
+
+            input_file.clone().into_iter(&args, pg)
+        })
         .collect::<Vec<_>>();
 
     for (i, input_file) in input_files.iter_mut().enumerate() {
@@ -309,13 +348,15 @@ fn main() -> anyhow::Result<()> {
     debug!("Packet heap initialized: {packet_heap:?}");
 
     while let Some(item) = packet_heap.pop() {
-        debug!("Processing packet: {item:?}");
+        // debug!("Processing packet: {item:?}");
 
         let input_file = &mut input_files[item.index];
 
         pcap_writer
             .write_packet(item.header, &item.data)
             .map_err(|e| anyhow!("Failed to write packet: {}", e))?;
+
+        write_pg.inc(1);
 
         if let Some(next_item) = input_file.next() {
             packet_heap.push(PacketHeapItem {
@@ -328,9 +369,12 @@ fn main() -> anyhow::Result<()> {
 
     pcap_writer.flush()?;
 
+    write_pg.finish_with_message("done");
+
     info!(
-        "Merged pcap files into {}",
-        args.output_file.unwrap().display()
+        "Merged pcap files into {}, taken {} seconds",
+        args.output_file.unwrap().display(),
+        start.elapsed().as_secs_f64()
     );
 
     Ok(())
