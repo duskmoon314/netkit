@@ -3,8 +3,6 @@ use std::{
     io::{BufReader, BufWriter, Read, Write},
 };
 
-// use deku::prelude::*;
-
 #[derive(Debug)]
 pub struct PcapReader<R: Read> {
     pub header: PcapHeader,
@@ -150,6 +148,20 @@ pub struct PacketHeader {
 
     /// Actual length of packet
     pub orig_len: u32,
+}
+
+impl PartialOrd for PacketHeader {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PacketHeader {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.ts_sec
+            .cmp(&other.ts_sec)
+            .then(self.ts_usec.cmp(&other.ts_usec))
+    }
 }
 
 #[derive(Debug)]
