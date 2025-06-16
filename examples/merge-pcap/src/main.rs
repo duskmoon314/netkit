@@ -1,12 +1,15 @@
-use std::{collections::BinaryHeap, fs::File, path::PathBuf, time::Duration};
+use std::{collections::BinaryHeap, fs::File, net::Ipv4Addr, path::PathBuf, time::Duration};
 
 use anyhow::anyhow;
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use indicatif_log_bridge::LogWrapper;
 use log::{debug, info};
 use netkit::capture::file::pcap::{PacketHeader, PcapReader, PcapWriter};
+use netkit::packet::prelude::*;
+use rand::seq::IndexedRandom;
+use rand::{SeedableRng, rngs::StdRng};
 use serde::Deserialize;
 
 /// merge-pcap (netkit)
@@ -20,7 +23,7 @@ struct Cli {
     /// If true, the program will remove the original timestamp of the packets
     /// in the pcap files, which is useful if the absolute time is not important
     /// for your analysis.
-    #[arg(short, long)]
+    #[arg(short, long, action = ArgAction::SetTrue)]
     erase_timestamp: Option<bool>,
 
     /// The config file to use
@@ -50,7 +53,7 @@ struct Cli {
     snaplen: Option<u32>,
 
     /// The precision of the timestamp
-    #[arg(long)]
+    #[arg(long, action = ArgAction::SetTrue)]
     nano_seconds: Option<bool>,
 }
 
@@ -79,6 +82,36 @@ impl Cli {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+#[serde(from = "String")]
+enum IpMap {
+    Ip(std::net::IpAddr),
+    Net(ipnet::IpNet),
+    Map(ipnet::IpNet, ipnet::IpNet),
+}
+
+impl From<String> for IpMap {
+    fn from(value: String) -> Self {
+        if let Ok(ip) = value.parse::<std::net::IpAddr>() {
+            IpMap::Ip(ip)
+        } else if let Ok(net) = value.parse::<ipnet::IpNet>() {
+            IpMap::Net(net)
+        } else {
+            let parts: Vec<&str> = value.split(':').collect();
+            if parts.len() == 2 {
+                if let (Ok(src), Ok(dst)) = (parts[0].parse(), parts[1].parse()) {
+                    IpMap::Map(src, dst)
+                } else {
+                    panic!("Invalid IP map format: {}", value);
+                }
+            } else {
+                panic!("Invalid IP map format: {}", value);
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct InputFile {
     /// The path to the input file
     path: PathBuf,
@@ -93,6 +126,17 @@ struct InputFile {
 
     /// The number of times to repeat the input file in one group
     repeat: u32,
+
+    /// The number of parallel input files
+    parallel: u32,
+
+    /// Rewrite source IP address
+    #[serde(default)]
+    srcipmap: Vec<IpMap>,
+
+    /// Rewrite destination IP address
+    #[serde(default)]
+    dstipmap: Vec<IpMap>,
 }
 
 impl InputFile {
@@ -104,17 +148,49 @@ impl InputFile {
             path,
             start_time: vec![0],
             repeat: 1,
+            parallel: 1,
+            srcipmap: vec![],
+            dstipmap: vec![],
         })
     }
 
     fn into_iter(self, cli: &Cli, pg: ProgressBar) -> InputFileIterator {
         let reader = PcapReader::new(File::open(&self.path).unwrap());
 
+        let src_ip_pool = self
+            .srcipmap
+            .iter()
+            .filter(|m| {
+                matches!(
+                    m,
+                    IpMap::Ip(std::net::IpAddr::V4(_)) | IpMap::Net(ipnet::IpNet::V4(_))
+                )
+            })
+            .flat_map(|m| match m {
+                IpMap::Ip(std::net::IpAddr::V4(ip)) => ipnet::Ipv4AddrRange::new(*ip, *ip),
+                IpMap::Net(ipnet::IpNet::V4(net)) => net.hosts(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<Ipv4Addr>>();
+        let dst_ip_pool = self
+            .dstipmap
+            .iter()
+            .filter(|m| {
+                matches!(
+                    m,
+                    IpMap::Ip(std::net::IpAddr::V4(_)) | IpMap::Net(ipnet::IpNet::V4(_))
+                )
+            })
+            .flat_map(|m| match m {
+                IpMap::Ip(std::net::IpAddr::V4(ip)) => ipnet::Ipv4AddrRange::new(*ip, *ip),
+                IpMap::Net(ipnet::IpNet::V4(net)) => net.hosts(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<Ipv4Addr>>();
+
         InputFileIterator {
-            path: self.path.clone(),
+            file: self,
             reader,
-            start_time: self.start_time.clone(),
-            repeat: self.repeat,
             current: 0,
             original_first_packet_time: None,
             first_packet_time: None,
@@ -122,16 +198,17 @@ impl InputFile {
             nano_seconds: cli.nano_seconds.unwrap_or(false),
             erase_timestamp: cli.erase_timestamp.unwrap_or(false),
             pg,
+            rng: StdRng::from_os_rng(),
+            src_ip_pool,
+            dst_ip_pool,
         }
     }
 }
 
 #[derive(Debug)]
 struct InputFileIterator {
-    path: PathBuf,
+    file: InputFile,
     reader: PcapReader<File>,
-    start_time: Vec<i32>,
-    repeat: u32,
     current: u32,
     original_first_packet_time: Option<u64>,
     first_packet_time: Option<(u32, u32)>,
@@ -139,10 +216,13 @@ struct InputFileIterator {
     nano_seconds: bool,
     erase_timestamp: bool,
     pg: ProgressBar,
+    rng: StdRng,
+    src_ip_pool: Vec<Ipv4Addr>,
+    dst_ip_pool: Vec<Ipv4Addr>,
 }
 
 impl Iterator for InputFileIterator {
-    type Item = (PacketHeader, Vec<u8>);
+    type Item = Vec<(PacketHeader, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut item = loop {
@@ -151,14 +231,14 @@ impl Iterator for InputFileIterator {
                 None => {
                     self.current += 1;
 
-                    if self.current == self.start_time.len() as u32 * self.repeat {
+                    if self.current == self.file.start_time.len() as u32 * self.file.repeat {
                         self.pg
-                            .finish_with_message(format!("{} done", self.path.display()));
+                            .finish_with_message(format!("{} done", self.file.path.display()));
 
                         return None;
                     }
 
-                    self.reader = PcapReader::new(File::open(&self.path).unwrap());
+                    self.reader = PcapReader::new(File::open(&self.file.path).unwrap());
                     self.first_packet_time = None;
                 }
             }
@@ -180,15 +260,16 @@ impl Iterator for InputFileIterator {
             self.original_first_packet_time =
                 Some(item.0.ts_sec as u64 * time_scale + item.0.ts_usec as u64);
 
-            if self.current % self.repeat == 0 {
+            if self.current % self.file.repeat == 0 {
                 // A new group
 
                 if self.erase_timestamp {
-                    item.0.ts_sec = self.start_time[(self.current / self.repeat) as usize] as u32;
+                    item.0.ts_sec =
+                        self.file.start_time[(self.current / self.file.repeat) as usize] as u32;
                     item.0.ts_usec = 0;
                 } else {
                     item.0.ts_sec = (item.0.ts_sec as i32
-                        + self.start_time[(self.current / self.repeat) as usize])
+                        + self.file.start_time[(self.current / self.file.repeat) as usize])
                         as u32;
                 }
             } else {
@@ -226,7 +307,39 @@ impl Iterator for InputFileIterator {
 
         self.pg.inc(1);
 
-        Some(item)
+        let mut items = vec![item; self.file.parallel as usize];
+
+        if self.src_ip_pool.is_empty() && self.dst_ip_pool.is_empty() {
+            return Some(items);
+        }
+
+        for item in items.iter_mut() {
+            let mut eth = Eth::new(&mut item.1).expect("Failed to parse Ethernet header");
+
+            let mut ipv4 = match eth.ipv4_mut() {
+                Some(ipv4) => ipv4,
+                None => {
+                    // If no IPv4 header, skip IP rewriting
+                    continue;
+                }
+            };
+
+            // TODO: handle IpMap::Map case
+
+            if !self.src_ip_pool.is_empty() {
+                let src_ip = self.src_ip_pool.choose(&mut self.rng).unwrap();
+
+                ipv4.src_mut().set(*src_ip);
+            }
+
+            if !self.dst_ip_pool.is_empty() {
+                let dst_ip = self.dst_ip_pool.choose(&mut self.rng).unwrap();
+
+                ipv4.dst_mut().set(*dst_ip);
+            }
+        }
+
+        Some(items)
     }
 }
 
@@ -332,11 +445,16 @@ fn main() -> anyhow::Result<()> {
 
     for (i, input_file) in input_files.iter_mut().enumerate() {
         if let Some(item) = input_file.next() {
-            packet_heap.push(PacketHeapItem {
+            // packet_heap.push(PacketHeapItem {
+            //     index: i,
+            //     header: item.0,
+            //     data: item.1,
+            // });
+            packet_heap.extend(item.into_iter().map(|(header, data)| PacketHeapItem {
                 index: i,
-                header: item.0,
-                data: item.1,
-            });
+                header,
+                data,
+            }));
         }
     }
 
@@ -351,14 +469,16 @@ fn main() -> anyhow::Result<()> {
             .write_packet(item.header, &item.data)
             .map_err(|e| anyhow!("Failed to write packet: {}", e))?;
 
-        write_pg.inc(1);
+        if packet_heap.len() < args.input_files.len() {
+            write_pg.inc(1);
 
-        if let Some(next_item) = input_file.next() {
-            packet_heap.push(PacketHeapItem {
-                index: item.index,
-                header: next_item.0,
-                data: next_item.1,
-            });
+            if let Some(next_item) = input_file.next() {
+                packet_heap.extend(next_item.into_iter().map(|(header, data)| PacketHeapItem {
+                    index: item.index,
+                    header,
+                    data,
+                }));
+            }
         }
     }
 
