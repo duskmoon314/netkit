@@ -54,7 +54,7 @@ struct Cli {
 
     /// The precision of the timestamp
     #[arg(long, action = ArgAction::SetTrue)]
-    nano_seconds: Option<bool>,
+    nanoseconds: Option<bool>,
 }
 
 impl Cli {
@@ -75,8 +75,8 @@ impl Cli {
             self.snaplen = Some(snaplen);
         }
 
-        if let Some(nano_seconds) = config.nano_seconds {
-            self.nano_seconds = Some(nano_seconds);
+        if let Some(nanoseconds) = config.nanoseconds {
+            self.nanoseconds = Some(nanoseconds);
         }
     }
 }
@@ -195,7 +195,7 @@ impl InputFile {
             original_first_packet_time: None,
             first_packet_time: None,
             last_packet_time: (0, 0),
-            nano_seconds: cli.nano_seconds.unwrap_or(false),
+            nanoseconds: cli.nanoseconds.unwrap_or(false),
             erase_timestamp: cli.erase_timestamp.unwrap_or(false),
             pg,
             rng: StdRng::from_os_rng(),
@@ -213,7 +213,7 @@ struct InputFileIterator {
     original_first_packet_time: Option<u64>,
     first_packet_time: Option<(u32, u32)>,
     last_packet_time: (u32, u32),
-    nano_seconds: bool,
+    nanoseconds: bool,
     erase_timestamp: bool,
     pg: ProgressBar,
     rng: StdRng,
@@ -244,7 +244,7 @@ impl Iterator for InputFileIterator {
             }
         };
 
-        let time_scale: u64 = if self.reader.nano_seconds {
+        let time_scale: u64 = if self.reader.nanoseconds {
             1_000_000_000
         } else {
             1_000_000
@@ -285,21 +285,24 @@ impl Iterator for InputFileIterator {
             // Calculate the time offset
 
             let current_packet_time = item.0.ts_sec as u64 * time_scale + item.0.ts_usec as u64;
+            let first_packet_time = self
+                .first_packet_time
+                .map(|(sec, usec)| sec as u64 * time_scale + usec as u64)
+                .expect("No first packet time");
 
             let current_packet_time = current_packet_time
                 - self
                     .original_first_packet_time
-                    .expect("No first packet time");
+                    .expect("No first packet time")
+                + first_packet_time;
 
-            item.0.ts_sec =
-                (current_packet_time / time_scale) as u32 + self.first_packet_time.unwrap().0;
-            item.0.ts_usec =
-                (current_packet_time % time_scale) as u32 + self.first_packet_time.unwrap().1;
+            item.0.ts_sec = (current_packet_time / time_scale) as u32;
+            item.0.ts_usec = (current_packet_time % time_scale) as u32;
         }
 
         self.last_packet_time = (item.0.ts_sec, item.0.ts_usec);
 
-        match (self.nano_seconds, self.reader.nano_seconds) {
+        match (self.nanoseconds, self.reader.nanoseconds) {
             (true, false) => item.0.ts_usec *= 1000,
             (false, true) => item.0.ts_usec /= 1000,
             _ => {}
@@ -421,7 +424,7 @@ fn main() -> anyhow::Result<()> {
     let mut pcap_writer = PcapWriter::new(
         &mut output_file,
         false,
-        args.nano_seconds.unwrap_or(false),
+        args.nanoseconds.unwrap_or(false),
         args.snaplen.unwrap_or(65535),
     )
     .map_err(|e| anyhow!("Failed to create pcap writer: {}", e))?;
