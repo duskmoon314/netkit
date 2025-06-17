@@ -1,0 +1,21 @@
+[package]
+name = "pcap-time-stats"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+csv = { workspace = true }
+env_logger = { workspace = true }
+humantime = { workspace = true }
+indicatif = { workspace = true }
+indicatif-log-bridge = { workspace = true }
+log = { workspace = true }
+netkit = { workspace = true }
+serde = { workspace = true }
