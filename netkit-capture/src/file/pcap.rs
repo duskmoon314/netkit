@@ -59,7 +59,7 @@ impl<R: Read> PcapReader<R> {
         Self {
             header,
             big_endian,
-            nanoseconds: nanoseconds,
+            nanoseconds,
             reader,
         }
     }

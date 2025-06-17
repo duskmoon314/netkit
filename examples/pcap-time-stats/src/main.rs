@@ -40,7 +40,7 @@ struct Stats {
 
 impl PartialOrd for Stats {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.time.partial_cmp(&other.time)
+        Some(self.cmp(other))
     }
 }
 
