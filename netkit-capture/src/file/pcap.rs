@@ -9,7 +9,7 @@ pub struct PcapReader<R: Read> {
 
     pub big_endian: bool,
 
-    pub nano_seconds: bool,
+    pub nanoseconds: bool,
 
     reader: BufReader<R>,
 }
@@ -23,7 +23,7 @@ impl<R: Read> PcapReader<R> {
 
         let magic_number = u32::from_be_bytes(magic_number);
 
-        let (big_endian, nano_seconds) = match magic_number {
+        let (big_endian, nanoseconds) = match magic_number {
             0xA1B2C3D4 => (true, false),
             0xA1B23C4D => (true, true),
             0xD4C3B2A1 => (false, false),
@@ -59,7 +59,7 @@ impl<R: Read> PcapReader<R> {
         Self {
             header,
             big_endian,
-            nano_seconds,
+            nanoseconds: nanoseconds,
             reader,
         }
     }
@@ -98,6 +98,10 @@ impl<R: Read> PcapReader<R> {
         });
 
         Some((header, data))
+    }
+
+    pub fn snaplen(&self) -> u32 {
+        self.header.snaplen
     }
 }
 
@@ -170,7 +174,7 @@ pub struct PcapWriter<W: Write> {
 
     pub big_endian: bool,
 
-    pub nano_seconds: bool,
+    pub nanoseconds: bool,
 
     writer: BufWriter<W>,
 }
@@ -179,12 +183,12 @@ impl<W: Write> PcapWriter<W> {
     pub fn new(
         writer: W,
         big_endian: bool,
-        nano_seconds: bool,
+        nanoseconds: bool,
         snaplen: u32,
     ) -> Result<Self, std::io::Error> {
         let mut writer = BufWriter::new(writer);
 
-        let magic_number: u32 = match (big_endian, nano_seconds) {
+        let magic_number: u32 = match (big_endian, nanoseconds) {
             (true, false) => 0xA1B2C3D4,
             (true, true) => 0xA1B23C4D,
             (false, false) => 0xD4C3B2A1,
@@ -226,7 +230,7 @@ impl<W: Write> PcapWriter<W> {
         Ok(Self {
             header,
             big_endian,
-            nano_seconds,
+            nanoseconds,
             writer,
         })
     }
