@@ -95,32 +95,32 @@ where
 
     /// Get the accessor of the TCI field.
     #[inline]
-    pub fn tci(&self) -> &Field<TciSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_TCI])
+    pub fn tci(&self) -> FieldRef<'_, TciSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_TCI])
     }
 
     /// Get the accessor of the PCP field.
     #[inline]
-    pub fn pcp(&self) -> &Field<PcpSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_PCP])
+    pub fn pcp(&self) -> FieldRef<'_, PcpSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_PCP])
     }
 
     /// Get the accessor of the DEI field.
     #[inline]
-    pub fn dei(&self) -> &Field<DeiSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_DEI])
+    pub fn dei(&self) -> FieldRef<'_, DeiSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_DEI])
     }
 
     /// Get the accessor of the VID field.
     #[inline]
-    pub fn vid(&self) -> &Field<VidSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_VID])
+    pub fn vid(&self) -> FieldRef<'_, VidSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_VID])
     }
 
     /// Get the accessor of the EthType field.
     #[inline]
-    pub fn eth_type(&self) -> &Field<EthTypeSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_ETH_TYPE])
+    pub fn eth_type(&self) -> FieldRef<'_, EthTypeSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_ETH_TYPE])
     }
 
     /// Get the payload
@@ -161,32 +161,32 @@ where
 
     /// Get the mutable accessor of the TCI field.
     #[inline]
-    pub fn tci_mut(&mut self) -> &mut Field<TciSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_TCI])
+    pub fn tci_mut(&mut self) -> FieldMut<'_, TciSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_TCI])
     }
 
     /// Get the mutable accessor of the PCP field.
     #[inline]
-    pub fn pcp_mut(&mut self) -> &mut Field<PcpSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_PCP])
+    pub fn pcp_mut(&mut self) -> FieldMut<'_, PcpSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_PCP])
     }
 
     /// Get the mutable accessor of the DEI field.
     #[inline]
-    pub fn dei_mut(&mut self) -> &mut Field<DeiSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_DEI])
+    pub fn dei_mut(&mut self) -> FieldMut<'_, DeiSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_DEI])
     }
 
     /// Get the mutable accessor of the VID field.
     #[inline]
-    pub fn vid_mut(&mut self) -> &mut Field<VidSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_VID])
+    pub fn vid_mut(&mut self) -> FieldMut<'_, VidSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_VID])
     }
 
     /// Get the mutable accessor of the EthType field.
     #[inline]
-    pub fn eth_type_mut(&mut self) -> &mut Field<EthTypeSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_ETH_TYPE])
+    pub fn eth_type_mut(&mut self) -> FieldMut<'_, EthTypeSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_ETH_TYPE])
     }
 
     /// Get the mutable payload

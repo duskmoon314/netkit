@@ -79,33 +79,33 @@ where
 
     /// Get the accessor of Type
     #[inline]
-    pub fn type_(&self) -> &Field<TypeSpec> {
-        cast_from_bytes(&self.data.as_ref()[0..1])
+    pub fn type_(&self) -> FieldRef<'_, TypeSpec> {
+        FieldRef::new(&self.data.as_ref()[0..1])
     }
 
     /// Get whether the label is normal
     pub fn is_normal(&self) -> bool {
-        *self.type_() == 0
+        self.type_().get() == 0
     }
 
     /// Get whether the label is compressed
     pub fn is_compressed(&self) -> bool {
-        *self.type_() == 0x03
+        self.type_().get() == 0x03
     }
 
     /// Get the length of the normal label
-    pub fn len(&self) -> Option<&Field<LenSpec>> {
+    pub fn len(&self) -> Option<FieldRef<'_, LenSpec>> {
         if self.is_normal() {
-            Some(cast_from_bytes(&self.data.as_ref()[0..1]))
+            Some(FieldRef::new(&self.data.as_ref()[0..1]))
         } else {
             None
         }
     }
 
     /// Get the offset of the compressed label
-    pub fn offset(&self) -> Option<&Field<OffsetSpec>> {
+    pub fn offset(&self) -> Option<FieldRef<'_, OffsetSpec>> {
         if self.is_compressed() {
-            Some(cast_from_bytes(&self.data.as_ref()[0..2]))
+            Some(FieldRef::new(&self.data.as_ref()[0..2]))
         } else {
             None
         }

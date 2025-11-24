@@ -38,7 +38,7 @@ where
 
     /// Get the labels as an iterator
     #[inline]
-    pub fn labels(&self) -> DnsNameLabelIter<T> {
+    pub fn labels(&self) -> DnsNameLabelIter<'_, T> {
         DnsNameLabelIter::from(self)
     }
 }

@@ -121,84 +121,84 @@ where
 
     /// Get the accessor of the ID
     #[inline]
-    pub fn id(&self) -> &Field<IdSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_ID])
+    pub fn id(&self) -> FieldRef<'_, IdSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_ID])
     }
 
     /// Get the accessor of the QR
     #[inline]
-    pub fn qr(&self) -> &Field<QrSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_QR])
+    pub fn qr(&self) -> FieldRef<'_, QrSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_QR])
     }
 
     /// Get the accessor of the OpCode
     #[inline]
-    pub fn opcode(&self) -> &Field<OpCodeSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_OPCODE])
+    pub fn opcode(&self) -> FieldRef<'_, OpCodeSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_OPCODE])
     }
 
     /// Get the accessor of the AA
     #[inline]
-    pub fn aa(&self) -> &Field<AaSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_AA])
+    pub fn aa(&self) -> FieldRef<'_, AaSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_AA])
     }
 
     /// Get the accessor of the TC
     #[inline]
-    pub fn tc(&self) -> &Field<TcSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_TC])
+    pub fn tc(&self) -> FieldRef<'_, TcSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_TC])
     }
 
     /// Get the accessor of the RD
     #[inline]
-    pub fn rd(&self) -> &Field<RdSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_RD])
+    pub fn rd(&self) -> FieldRef<'_, RdSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_RD])
     }
 
     /// Get the accessor of the RA
     #[inline]
-    pub fn ra(&self) -> &Field<RaSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_RA])
+    pub fn ra(&self) -> FieldRef<'_, RaSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_RA])
     }
 
     /// Get the accessor of the Z
     #[inline]
-    pub fn z(&self) -> &Field<ZSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_Z])
+    pub fn z(&self) -> FieldRef<'_, ZSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_Z])
     }
 
     /// Get the accessor of the RCode
     #[inline]
-    pub fn rcode(&self) -> &Field<RCodeSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_RCODE])
+    pub fn rcode(&self) -> FieldRef<'_, RCodeSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_RCODE])
     }
 
     /// Get the accessor of the QDCount
     #[inline]
-    pub fn qdcount(&self) -> &Field<CountSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_QDCOUNT])
+    pub fn qdcount(&self) -> FieldRef<'_, CountSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_QDCOUNT])
     }
 
     /// Get the accessor of the ANCount
     #[inline]
-    pub fn ancount(&self) -> &Field<CountSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_ANCOUNT])
+    pub fn ancount(&self) -> FieldRef<'_, CountSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_ANCOUNT])
     }
 
     /// Get the accessor of the NSCount
     #[inline]
-    pub fn nscount(&self) -> &Field<CountSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_NSCOUNT])
+    pub fn nscount(&self) -> FieldRef<'_, CountSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_NSCOUNT])
     }
 
     /// Get the accessor of the ARCount
     #[inline]
-    pub fn arcount(&self) -> &Field<CountSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_ARCOUNT])
+    pub fn arcount(&self) -> FieldRef<'_, CountSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_ARCOUNT])
     }
 
     /// Get the iterator of the questions
-    pub fn questions(&self) -> DnsQuestionIter<T> {
+    pub fn questions(&self) -> DnsQuestionIter<'_, T> {
         DnsQuestionIter::from(self)
     }
 }
@@ -215,80 +215,80 @@ where
 
     /// Get the mutable accessor of the ID
     #[inline]
-    pub fn id_mut(&mut self) -> &mut Field<IdSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_ID])
+    pub fn id_mut(&mut self) -> FieldMut<'_, IdSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_ID])
     }
 
     /// Get the mutable accessor of the QR
     #[inline]
-    pub fn qr_mut(&mut self) -> &mut Field<QrSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_QR])
+    pub fn qr_mut(&mut self) -> FieldMut<'_, QrSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_QR])
     }
 
     /// Get the mutable accessor of the OpCode
     #[inline]
-    pub fn opcode_mut(&mut self) -> &mut Field<OpCodeSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_OPCODE])
+    pub fn opcode_mut(&mut self) -> FieldMut<'_, OpCodeSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_OPCODE])
     }
 
     /// Get the mutable accessor of the AA
     #[inline]
-    pub fn aa_mut(&mut self) -> &mut Field<AaSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_AA])
+    pub fn aa_mut(&mut self) -> FieldMut<'_, AaSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_AA])
     }
 
     /// Get the mutable accessor of the TC
     #[inline]
-    pub fn tc_mut(&mut self) -> &mut Field<TcSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_TC])
+    pub fn tc_mut(&mut self) -> FieldMut<'_, TcSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_TC])
     }
 
     /// Get the mutable accessor of the RD
     #[inline]
-    pub fn rd_mut(&mut self) -> &mut Field<RdSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_RD])
+    pub fn rd_mut(&mut self) -> FieldMut<'_, RdSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_RD])
     }
 
     /// Get the mutable accessor of the RA
     #[inline]
-    pub fn ra_mut(&mut self) -> &mut Field<RaSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_RA])
+    pub fn ra_mut(&mut self) -> FieldMut<'_, RaSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_RA])
     }
 
     /// Get the mutable accessor of the Z
     #[inline]
-    pub fn z_mut(&mut self) -> &mut Field<ZSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_Z])
+    pub fn z_mut(&mut self) -> FieldMut<'_, ZSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_Z])
     }
 
     /// Get the mutable accessor of the RCode
     #[inline]
-    pub fn rcode_mut(&mut self) -> &mut Field<RCodeSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_RCODE])
+    pub fn rcode_mut(&mut self) -> FieldMut<'_, RCodeSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_RCODE])
     }
 
     /// Get the mutable accessor of the QDCount
     #[inline]
-    pub fn qdcount_mut(&mut self) -> &mut Field<CountSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_QDCOUNT])
+    pub fn qdcount_mut(&mut self) -> FieldMut<'_, CountSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_QDCOUNT])
     }
 
     /// Get the mutable accessor of the ANCount
     #[inline]
-    pub fn ancount_mut(&mut self) -> &mut Field<CountSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_ANCOUNT])
+    pub fn ancount_mut(&mut self) -> FieldMut<'_, CountSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_ANCOUNT])
     }
 
     /// Get the mutable accessor of the NSCount
     #[inline]
-    pub fn nscount_mut(&mut self) -> &mut Field<CountSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_NSCOUNT])
+    pub fn nscount_mut(&mut self) -> FieldMut<'_, CountSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_NSCOUNT])
     }
 
     /// Get the mutable accessor of the ARCount
     #[inline]
-    pub fn arcount_mut(&mut self) -> &mut Field<CountSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_ARCOUNT])
+    pub fn arcount_mut(&mut self) -> FieldMut<'_, CountSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_ARCOUNT])
     }
 }
 

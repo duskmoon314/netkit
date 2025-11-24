@@ -97,56 +97,56 @@ where
 
     /// Get the accessor of the source port.
     #[inline]
-    pub fn src_port(&self) -> &Field<PortSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_SRC_PORT])
+    pub fn src_port(&self) -> FieldRef<'_, PortSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_SRC_PORT])
     }
 
     /// Get the accessor of the destination port.
     #[inline]
-    pub fn dst_port(&self) -> &Field<PortSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_DST_PORT])
+    pub fn dst_port(&self) -> FieldRef<'_, PortSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_DST_PORT])
     }
 
     /// Get the accessor of the sequence number.
     #[inline]
-    pub fn seq_num(&self) -> &Field<SeqNumSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_SEQ_NUM])
+    pub fn seq_num(&self) -> FieldRef<'_, SeqNumSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_SEQ_NUM])
     }
 
     /// Get the accessor of the acknowledgment number.
     #[inline]
-    pub fn ack_num(&self) -> &Field<AckNumSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_ACK_NUM])
+    pub fn ack_num(&self) -> FieldRef<'_, AckNumSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_ACK_NUM])
     }
 
     /// Get the accessor of the data offset.
     #[inline]
-    pub fn data_offset(&self) -> &Field<DataOffsetSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_DATA_OFFSET])
+    pub fn data_offset(&self) -> FieldRef<'_, DataOffsetSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_DATA_OFFSET])
     }
 
     /// Get the accessor of the flags.
     #[inline]
-    pub fn flags(&self) -> &Field<FlagsSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_FLAGS])
+    pub fn flags(&self) -> FieldRef<'_, FlagsSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_FLAGS])
     }
 
     /// Get the accessor of the window size.
     #[inline]
-    pub fn window_size(&self) -> &Field<WindowSizeSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_WINDOW_SIZE])
+    pub fn window_size(&self) -> FieldRef<'_, WindowSizeSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_WINDOW_SIZE])
     }
 
     /// Get the accessor of the checksum.
     #[inline]
-    pub fn checksum(&self) -> &Field<ChecksumSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_CHECKSUM])
+    pub fn checksum(&self) -> FieldRef<'_, ChecksumSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_CHECKSUM])
     }
 
     /// Get the accessor of the urgent pointer.
     #[inline]
-    pub fn urgent_pointer(&self) -> &Field<UrgentPointerSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_URGENT_POINTER])
+    pub fn urgent_pointer(&self) -> FieldRef<'_, UrgentPointerSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_URGENT_POINTER])
     }
 
     /// Get the options.
@@ -176,56 +176,56 @@ where
 
     /// Get the mutable accessor of the source port.
     #[inline]
-    pub fn src_port_mut(&mut self) -> &mut Field<PortSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_SRC_PORT])
+    pub fn src_port_mut(&mut self) -> FieldMut<'_, PortSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_SRC_PORT])
     }
 
     /// Get the mutable accessor of the destination port.
     #[inline]
-    pub fn dst_port_mut(&mut self) -> &mut Field<PortSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_DST_PORT])
+    pub fn dst_port_mut(&mut self) -> FieldMut<'_, PortSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_DST_PORT])
     }
 
     /// Get the mutable accessor of the sequence number.
     #[inline]
-    pub fn seq_num_mut(&mut self) -> &mut Field<SeqNumSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_SEQ_NUM])
+    pub fn seq_num_mut(&mut self) -> FieldMut<'_, SeqNumSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_SEQ_NUM])
     }
 
     /// Get the mutable accessor of the acknowledgment number.
     #[inline]
-    pub fn ack_num_mut(&mut self) -> &mut Field<AckNumSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_ACK_NUM])
+    pub fn ack_num_mut(&mut self) -> FieldMut<'_, AckNumSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_ACK_NUM])
     }
 
     /// Get the mutable accessor of the data offset.
     #[inline]
-    pub fn data_offset_mut(&mut self) -> &mut Field<DataOffsetSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_DATA_OFFSET])
+    pub fn data_offset_mut(&mut self) -> FieldMut<'_, DataOffsetSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_DATA_OFFSET])
     }
 
     /// Get the mutable accessor of the flags.
     #[inline]
-    pub fn flags_mut(&mut self) -> &mut Field<FlagsSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_FLAGS])
+    pub fn flags_mut(&mut self) -> FieldMut<'_, FlagsSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_FLAGS])
     }
 
     /// Get the mutable accessor of the window size.
     #[inline]
-    pub fn window_size_mut(&mut self) -> &mut Field<WindowSizeSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_WINDOW_SIZE])
+    pub fn window_size_mut(&mut self) -> FieldMut<'_, WindowSizeSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_WINDOW_SIZE])
     }
 
     /// Get the mutable accessor of the checksum.
     #[inline]
-    pub fn checksum_mut(&mut self) -> &mut Field<ChecksumSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_CHECKSUM])
+    pub fn checksum_mut(&mut self) -> FieldMut<'_, ChecksumSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_CHECKSUM])
     }
 
     /// Get the mutable accessor of the urgent pointer.
     #[inline]
-    pub fn urgent_pointer_mut(&mut self) -> &mut Field<UrgentPointerSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_URGENT_POINTER])
+    pub fn urgent_pointer_mut(&mut self) -> FieldMut<'_, UrgentPointerSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_URGENT_POINTER])
     }
 
     /// Get the mutable options.

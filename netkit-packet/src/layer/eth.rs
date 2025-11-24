@@ -81,20 +81,20 @@ where
 
     /// Get the accessor of the destination MAC address.
     #[inline]
-    pub fn dst(&self) -> &Field<EthAddrSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_DST])
+    pub fn dst(&self) -> FieldRef<'_, EthAddrSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_DST])
     }
 
     /// Get the accessor of the source MAC address.
     #[inline]
-    pub fn src(&self) -> &Field<EthAddrSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_SRC])
+    pub fn src(&self) -> FieldRef<'_, EthAddrSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_SRC])
     }
 
     /// Get the accessor of the Eth type.
     #[inline]
-    pub fn eth_type(&self) -> &Field<EthTypeSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_ETH_TYPE])
+    pub fn eth_type(&self) -> FieldRef<'_, EthTypeSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_ETH_TYPE])
     }
 
     /// Get the payload.
@@ -127,20 +127,20 @@ where
 
     /// Get the mutable accessor of the destination MAC address.
     #[inline]
-    pub fn dst_mut(&mut self) -> &mut Field<EthAddrSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_DST])
+    pub fn dst_mut(&mut self) -> FieldMut<'_, EthAddrSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_DST])
     }
 
     /// Get the mutable accessor of the source MAC address.
     #[inline]
-    pub fn src_mut(&mut self) -> &mut Field<EthAddrSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_SRC])
+    pub fn src_mut(&mut self) -> FieldMut<'_, EthAddrSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_SRC])
     }
 
     /// Get the mutable accessor of the Eth type.
     #[inline]
-    pub fn eth_type_mut(&mut self) -> &mut Field<EthTypeSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_ETH_TYPE])
+    pub fn eth_type_mut(&mut self) -> FieldMut<'_, EthTypeSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_ETH_TYPE])
     }
 
     /// Get the mutable payload.

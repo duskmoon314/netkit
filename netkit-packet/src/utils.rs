@@ -1,16 +1,24 @@
 //! Utilitie types and functions for netkit-packet.
 
+use std::ptr;
+
 pub mod field;
 pub mod test_enum;
 
 pub use field::*;
 
-pub(crate) fn cast_from_bytes<T>(s: &[u8]) -> &T {
-    unsafe { &*(s.as_ptr() as *const T) }
+/// Read an underlay value using unaligned pointer access.
+///
+/// This is safe for any alignment and compiles to efficient code on x86/x64.
+pub(crate) fn read_unaligned<U: Underlay>(bytes: &[u8]) -> U {
+    unsafe { ptr::read_unaligned(bytes.as_ptr() as *const U) }
 }
 
-pub(crate) fn cast_from_bytes_mut<T>(s: &mut [u8]) -> &mut T {
-    unsafe { &mut *(s.as_mut_ptr() as *mut T) }
+/// Write an underlay value using unaligned pointer access.
+///
+/// This is safe for any alignment and compiles to efficient code on x86/x64.
+pub(crate) fn write_unaligned<U: Underlay>(bytes: &mut [u8], value: U) {
+    unsafe { ptr::write_unaligned(bytes.as_mut_ptr() as *mut U, value) }
 }
 
 macro_rules! layer_impl {

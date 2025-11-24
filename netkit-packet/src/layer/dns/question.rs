@@ -79,14 +79,14 @@ where
 
     /// Get the accessor of qtype
     #[inline]
-    pub fn qtype(&self) -> &Field<QtypeSpec> {
-        cast_from_bytes(&self.data.as_ref()[self.name_len + 1..self.name_len + 3])
+    pub fn qtype(&self) -> FieldRef<'_, QtypeSpec> {
+        FieldRef::new(&self.data.as_ref()[self.name_len + 1..self.name_len + 3])
     }
 
     /// Get the accessor of qclass
     #[inline]
-    pub fn qclass(&self) -> &Field<QclassSpec> {
-        cast_from_bytes(&self.data.as_ref()[self.name_len + 3..self.name_len + 5])
+    pub fn qclass(&self) -> FieldRef<'_, QclassSpec> {
+        FieldRef::new(&self.data.as_ref()[self.name_len + 3..self.name_len + 5])
     }
 }
 
@@ -108,14 +108,14 @@ where
 
     /// Get the mutable accessor of qtype
     #[inline]
-    pub fn qtype_mut(&mut self) -> &mut Field<QtypeSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[self.name_len + 1..self.name_len + 3])
+    pub fn qtype_mut(&mut self) -> FieldMut<'_, QtypeSpec> {
+        FieldMut::new(&mut self.data.as_mut()[self.name_len + 1..self.name_len + 3])
     }
 
     /// Get the mutable accessor of qclass
     #[inline]
-    pub fn qclass_mut(&mut self) -> &mut Field<QclassSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[self.name_len + 3..self.name_len + 5])
+    pub fn qclass_mut(&mut self) -> FieldMut<'_, QclassSpec> {
+        FieldMut::new(&mut self.data.as_mut()[self.name_len + 3..self.name_len + 5])
     }
 }
 

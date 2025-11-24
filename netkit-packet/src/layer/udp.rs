@@ -82,26 +82,26 @@ where
 
     /// Get the accessor of the source port.
     #[inline]
-    pub fn src_port(&self) -> &Field<PortSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_SRC_PORT])
+    pub fn src_port(&self) -> FieldRef<'_, PortSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_SRC_PORT])
     }
 
     /// Get the accessor of the destination port.
     #[inline]
-    pub fn dst_port(&self) -> &Field<PortSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_DST_PORT])
+    pub fn dst_port(&self) -> FieldRef<'_, PortSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_DST_PORT])
     }
 
     /// Get the accessor of the length.
     #[inline]
-    pub fn length(&self) -> &Field<LengthSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_LENGTH])
+    pub fn length(&self) -> FieldRef<'_, LengthSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_LENGTH])
     }
 
     /// Get the accessor of the checksum.
     #[inline]
-    pub fn checksum(&self) -> &Field<ChecksumSpec> {
-        cast_from_bytes(&self.data.as_ref()[Self::FIELD_CHECKSUM])
+    pub fn checksum(&self) -> FieldRef<'_, ChecksumSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_CHECKSUM])
     }
 
     /// Get the payload.
@@ -123,26 +123,26 @@ where
 
     /// Get the mutable accessor of the source port.
     #[inline]
-    pub fn src_port_mut(&mut self) -> &mut Field<PortSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_SRC_PORT])
+    pub fn src_port_mut(&mut self) -> FieldMut<'_, PortSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_SRC_PORT])
     }
 
     /// Get the mutable accessor of the destination port.
     #[inline]
-    pub fn dst_port_mut(&mut self) -> &mut Field<PortSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_DST_PORT])
+    pub fn dst_port_mut(&mut self) -> FieldMut<'_, PortSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_DST_PORT])
     }
 
     /// Get the mutable accessor of the length.
     #[inline]
-    pub fn length_mut(&mut self) -> &mut Field<LengthSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_LENGTH])
+    pub fn length_mut(&mut self) -> FieldMut<'_, LengthSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_LENGTH])
     }
 
     /// Get the mutable accessor of the checksum.
     #[inline]
-    pub fn checksum_mut(&mut self) -> &mut Field<ChecksumSpec> {
-        cast_from_bytes_mut(&mut self.data.as_mut()[Self::FIELD_CHECKSUM])
+    pub fn checksum_mut(&mut self) -> FieldMut<'_, ChecksumSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_CHECKSUM])
     }
 
     /// Get the mutable payload.
