@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use clap::{Args, Parser, ValueEnum};
 use log::{debug, error, info};
 use netkit::capture::file::pcap::PcapReader;
+use netkit::capture::linktype::LinkType;
 use netkit::packet::prelude::*;
 use polars::prelude::*;
 
@@ -218,6 +219,60 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Process a single packet based on link type
+/// Returns (eth_type, ipv4_packet_data) if successful
+fn process_packet<'a>(
+    linktype: LinkType,
+    data: &'a [u8],
+    stats: &mut Statistics,
+) -> Option<(u16, &'a [u8])> {
+    match linktype {
+        LinkType::Ethernet => {
+            // Parse Ethernet frame
+            match Eth::new(data) {
+                Ok(eth) => {
+                    let eth_type = eth.eth_type().get().into();
+                    // Check if it's IPv4 (EtherType 0x0800)
+                    if eth_type == 0x0800u16 {
+                        // IPv4 packet starts after Ethernet header (14 bytes)
+                        if data.len() > 14 {
+                            Some((eth_type, &data[14..]))
+                        } else {
+                            error!("Ethernet frame too short for IPv4");
+                            stats.parse_errors += 1;
+                            None
+                        }
+                    } else {
+                        stats.non_ipv4_packets += 1;
+                        None
+                    }
+                }
+                Err(err) => {
+                    error!("Error parsing Ethernet frame: {:?}", err);
+                    stats.parse_errors += 1;
+                    None
+                }
+            }
+        }
+        LinkType::Ipv4 | LinkType::Raw => {
+            // Parse IPv4 directly without link layer (verify it's valid IPv4)
+            match Ipv4::new(data) {
+                Ok(_ip) => Some((0x0800u16, data)),
+                Err(err) => {
+                    error!("Error parsing IPv4 packet: {:?}", err);
+                    stats.parse_errors += 1;
+                    None
+                }
+            }
+        }
+        _ => {
+            error!("Unsupported link type: {:?}", linktype);
+            stats.parse_errors += 1;
+            None
+        }
+    }
+}
+
 fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> anyhow::Result<()> {
     let file = std::fs::File::open(file_path.clone())?;
     let file_size = file.metadata()?.len();
@@ -239,6 +294,8 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
             "microseconds"
         }
     );
+
+    let linktype: LinkType = reader.header.network.into();
 
     let pg = multi
         .add(indicatif::ProgressBar::no_length().with_finish(indicatif::ProgressFinish::Abandon));
@@ -270,16 +327,23 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
         }
         stats.last_timestamp = Some(ts);
 
-        let eth = match Eth::new(data) {
-            Ok(eth) => eth,
+        // Process packet based on link type
+        let (eth_type, ip_data) = match process_packet(linktype, &data, &mut stats) {
+            Some(result) => result,
+            None => continue,
+        };
+
+        // Parse the IPv4 packet from the extracted data
+        let ip = match Ipv4::new(ip_data) {
+            Ok(ip) => ip,
             Err(err) => {
-                error!("Error parsing Ethernet frame: {:?}", err);
+                error!("Error parsing IPv4 from extracted data: {:?}", err);
                 stats.parse_errors += 1;
                 continue;
             }
         };
 
-        if let Some(ip) = eth.ipv4() {
+        {
             stats.ipv4_packets += 1;
 
             let src_addr: u32 = ip.src().get().into();
@@ -317,7 +381,7 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
                 batch.push(
                     ts,
                     hdr.orig_len,
-                    eth.eth_type().get().into(),
+                    eth_type,
                     src_addr,
                     dst_addr,
                     protocol,
@@ -342,9 +406,6 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
                     batch_count += 1;
                 }
             }
-        } else {
-            stats.non_ipv4_packets += 1;
-            debug!("No IPv4 packet found, skipping");
         }
     }
 
