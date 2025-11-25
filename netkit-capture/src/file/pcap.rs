@@ -3,6 +3,8 @@ use std::{
     io::{BufReader, BufWriter, Read, Write},
 };
 
+use crate::linktype::LinkType;
+
 #[derive(Debug)]
 pub struct PcapReader<R: Read> {
     pub header: PcapHeader,
@@ -185,6 +187,7 @@ impl<W: Write> PcapWriter<W> {
         big_endian: bool,
         nanoseconds: bool,
         snaplen: u32,
+        linktype: LinkType,
     ) -> Result<Self, std::io::Error> {
         let mut writer = BufWriter::new(writer);
 
@@ -202,7 +205,7 @@ impl<W: Write> PcapWriter<W> {
             thiszone: 0,
             sigfigs: 0,
             snaplen,
-            network: 1, // Ethernet
+            network: linktype as u32,
         };
 
         // Write the header
