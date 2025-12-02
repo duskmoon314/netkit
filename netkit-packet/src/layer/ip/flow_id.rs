@@ -173,6 +173,8 @@ impl PartialEq for FlowId {
     }
 }
 
+impl Eq for FlowId {}
+
 impl From<IpAddr> for FlowId {
     fn from(addr: IpAddr) -> Self {
         FlowId::Ip(addr)
