@@ -3,7 +3,7 @@
 use core::net::Ipv4Addr;
 
 use super::IpProtocol;
-use crate::{field_spec, impl_target, prelude::*};
+use crate::{field_spec, impl_target, layer::ip::flow_id::FlowId, prelude::*};
 
 /// Error type for Ipv4.
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]
@@ -11,6 +11,10 @@ pub enum Ipv4Error {
     /// Invalid Ipv4 length.
     #[error("Invalid Ipv4 length: Length {0} is less than minimum 20")]
     InvalidLength(usize),
+
+    /// Invalid Arguments.
+    #[error("Invalid Arguments: {0}")]
+    InvalidArguments(String),
 }
 
 impl_target!(frominto, core::net::Ipv4Addr, u32);
@@ -224,6 +228,92 @@ where
             Udp::new(self.payload()).ok()
         } else {
             None
+        }
+    }
+
+    /// Get the flow id formed by ip, port and protocol.
+    ///
+    /// # Arguments
+    ///
+    /// * `elements` - Number of elements to use for the flow id:
+    ///   - 1: only ip addresses
+    ///   - 2: src/dst ip
+    ///   - 3: src/dst ip + protocol
+    ///   - 4: src/dst ip + src/dst port
+    ///   - 5: src/dst ip + protocol + src/dst port
+    /// * `symmetric` - Whether to create a symmetric flow id (i.e., src/dst swapped)
+    ///   - true: the smaller ip address is always src
+    ///   - false: the src/dst as is  
+    ///   - If `elements` is 1, then `symmetric` is used to determine which ip address is used.
+    ///     - true: the src ip address is used
+    ///     - false: the dst ip address is used
+    pub fn flow_id(&self, elements: u8, symmetric: bool) -> Result<FlowId, Ipv4Error> {
+        match (elements, symmetric) {
+            (1, true) => Ok(FlowId::from(self.src().get())),
+            (1, false) => Ok(FlowId::from(self.dst().get())),
+            (2, sym) => Ok(FlowId::from_tuple2(self.src().get(), self.dst().get(), sym)),
+            (3, sym) => Ok(FlowId::from_tuple3(
+                self.src().get(),
+                self.dst().get(),
+                self.protocol().get(),
+                sym,
+            )),
+            (4, sym) => {
+                let udp = self.udp();
+                let tcp = self.tcp();
+                if let Some(udp) = udp {
+                    Ok(FlowId::from_tuple4(
+                        self.src().get(),
+                        self.dst().get(),
+                        udp.src_port().get(),
+                        udp.dst_port().get(),
+                        sym,
+                    ))
+                } else if let Some(tcp) = tcp {
+                    Ok(FlowId::from_tuple4(
+                        self.src().get(),
+                        self.dst().get(),
+                        tcp.src_port().get(),
+                        tcp.dst_port().get(),
+                        sym,
+                    ))
+                } else {
+                    Err(Ipv4Error::InvalidArguments(
+                        "Cannot extract ports from non-TCP/UDP protocol".to_string(),
+                    ))
+                }
+            }
+            (5, sym) => {
+                let udp = self.udp();
+                let tcp = self.tcp();
+                if let Some(udp) = udp {
+                    Ok(FlowId::from_tuple5(
+                        self.src().get(),
+                        self.dst().get(),
+                        udp.src_port().get(),
+                        udp.dst_port().get(),
+                        self.protocol().get(),
+                        sym,
+                    ))
+                } else if let Some(tcp) = tcp {
+                    Ok(FlowId::from_tuple5(
+                        self.src().get(),
+                        self.dst().get(),
+                        tcp.src_port().get(),
+                        tcp.dst_port().get(),
+                        self.protocol().get(),
+                        sym,
+                    ))
+                } else {
+                    Err(Ipv4Error::InvalidArguments(
+                        "Cannot extract ports from non-TCP/UDP protocol".to_string(),
+                    ))
+                }
+            }
+
+            _ => Err(Ipv4Error::InvalidArguments(
+                "Elements must be between 1 and 5".to_string(),
+            )),
         }
     }
 }
