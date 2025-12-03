@@ -66,7 +66,13 @@ impl FlowId {
         sym: bool,
     ) -> Self {
         if sym {
-            FlowId::Tuple3Sym(src.into(), dst.into(), proto.into())
+            let src = src.into();
+            let dst = dst.into();
+            if src <= dst {
+                FlowId::Tuple3Sym(src, dst, proto.into())
+            } else {
+                FlowId::Tuple3Sym(dst, src, proto.into())
+            }
         } else {
             FlowId::Tuple3(src.into(), dst.into(), proto.into())
         }
@@ -81,7 +87,13 @@ impl FlowId {
         sym: bool,
     ) -> Self {
         if sym {
-            FlowId::Tuple4Sym(src.into(), dst.into(), sport, dport)
+            let src = src.into();
+            let dst = dst.into();
+            if src <= dst {
+                FlowId::Tuple4Sym(src, dst, sport, dport)
+            } else {
+                FlowId::Tuple4Sym(dst, src, dport, sport)
+            }
         } else {
             FlowId::Tuple4(src.into(), dst.into(), sport, dport)
         }
@@ -97,7 +109,13 @@ impl FlowId {
         sym: bool,
     ) -> Self {
         if sym {
-            FlowId::Tuple5Sym(src.into(), dst.into(), sport, dport, proto.into())
+            let src = src.into();
+            let dst = dst.into();
+            if src <= dst {
+                FlowId::Tuple5Sym(src, dst, sport, dport, proto.into())
+            } else {
+                FlowId::Tuple5Sym(dst, src, dport, sport, proto.into())
+            }
         } else {
             FlowId::Tuple5(src.into(), dst.into(), sport, dport, proto.into())
         }
