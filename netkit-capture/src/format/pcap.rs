@@ -114,8 +114,8 @@ impl PcapPacketHeader {
     /// Size of the pcap packet header in bytes.
     pub const SIZE: usize = 16;
 
-    /// Convert to universal Packet with nanosecond flag.
-    pub fn to_packet(&self, data: Vec<u8>, nanoseconds: bool) -> Packet {
+    /// Convert to universal Packet with nanosecond flag and linktype.
+    pub fn to_packet(&self, data: Vec<u8>, nanoseconds: bool, linktype: LinkType) -> Packet {
         let ts_nsec = if nanoseconds {
             self.ts_usec
         } else {
@@ -123,7 +123,7 @@ impl PcapPacketHeader {
         };
         let timestamp_ns = (self.ts_sec as i64) * 1_000_000_000 + (ts_nsec as i64);
 
-        Packet::new(timestamp_ns, self.orig_len, data)
+        Packet::new(timestamp_ns, self.orig_len, data).with_linktype(linktype)
     }
 
     /// Create from universal Packet with nanosecond flag.
@@ -330,7 +330,10 @@ impl<R: Read> Iterator for PcapPacketIterator<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.reader.try_next_packet() {
-            Ok(Some((hdr, data))) => Some(Ok(hdr.to_packet(data, self.reader.nanoseconds))),
+            Ok(Some((hdr, data))) => {
+                let linktype = self.reader.linktype();
+                Some(Ok(hdr.to_packet(data, self.reader.nanoseconds, linktype)))
+            }
             Ok(None) => None,
             Err(e) => Some(Err(e)),
         }
@@ -569,10 +572,11 @@ mod tests {
         };
 
         // Convert to Packet (microseconds mode)
-        let packet = pcap_hdr.to_packet(vec![0; 10], false);
+        let packet = pcap_hdr.to_packet(vec![0; 10], false, LinkType::Ethernet);
         assert_eq!(packet.ts_sec(), 100);
         assert_eq!(packet.ts_usec(), 500_000);
         assert_eq!(packet.orig_len, 100);
+        assert_eq!(packet.linktype, Some(LinkType::Ethernet));
         assert!(packet.is_truncated());
 
         // Convert back

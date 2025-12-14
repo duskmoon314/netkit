@@ -1,5 +1,7 @@
 //! Universal packet representation for all capture formats.
 
+use crate::LinkType;
+
 /// A format-agnostic packet representation.
 ///
 /// This struct provides a common representation for packets from any capture
@@ -28,6 +30,9 @@ pub struct Packet {
     /// For pcap files, this is always 0.
     pub interface_id: u32,
 
+    /// Linktype of the packet data.
+    pub linktype: Option<LinkType>,
+
     /// Optional packet metadata.
     pub metadata: Option<PacketMetadata>,
 }
@@ -40,6 +45,7 @@ impl Packet {
             orig_len,
             data,
             interface_id: 0,
+            linktype: None,
             metadata: None,
         }
     }
@@ -47,6 +53,12 @@ impl Packet {
     /// Create a packet with interface ID (for pcapng).
     pub fn with_interface(mut self, interface_id: u32) -> Self {
         self.interface_id = interface_id;
+        self
+    }
+
+    /// Create a packet with linktype.
+    pub fn with_linktype(mut self, linktype: LinkType) -> Self {
+        self.linktype = Some(linktype);
         self
     }
 

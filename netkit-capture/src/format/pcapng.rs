@@ -499,16 +499,19 @@ impl<R: Read> PcapngReader<R> {
         let mut buf = [0u8; 4];
         self.reader.read_exact(&mut buf)?;
 
-        // Convert timestamp
-        let timestamp_ns = if (interface_id as usize) < self.interfaces.len() {
-            self.interfaces[interface_id as usize].timestamp_to_ns(ts_high, ts_low)
+        // Convert timestamp and get linktype
+        let (timestamp_ns, linktype) = if (interface_id as usize) < self.interfaces.len() {
+            let iface = &self.interfaces[interface_id as usize];
+            (iface.timestamp_to_ns(ts_high, ts_low), iface.link_type)
         } else {
             // Default to microseconds if interface not found
             let ts = ((ts_high as u64) << 32) | (ts_low as u64);
-            (ts * 1000) as i64
+            ((ts * 1000) as i64, LinkType::default())
         };
 
-        Ok(Packet::new(timestamp_ns, orig_len, data).with_interface(interface_id))
+        Ok(Packet::new(timestamp_ns, orig_len, data)
+            .with_interface(interface_id)
+            .with_linktype(linktype))
     }
 
     /// Read Simple Packet Block.
@@ -534,8 +537,10 @@ impl<R: Read> PcapngReader<R> {
         let mut buf = [0u8; 4];
         self.reader.read_exact(&mut buf)?;
 
-        // SPB has no timestamp, use 0
-        Ok(Packet::new(0, orig_len, data))
+        // SPB uses interface 0 by default, no timestamp
+        let linktype = self.interfaces.first().map(|i| i.link_type).unwrap_or_default();
+
+        Ok(Packet::new(0, orig_len, data).with_linktype(linktype))
     }
 
     /// Get the primary link type (from first interface).
@@ -786,6 +791,7 @@ mod tests {
 
         assert_eq!(packet.data.len(), 100);
         assert_eq!(packet.orig_len, 100);
+        assert_eq!(packet.linktype, Some(LinkType::Ethernet));
         // Timestamp should be preserved (within rounding)
         assert!((packet.timestamp_ns - 1_500_000_000_000).abs() < 1000);
     }
