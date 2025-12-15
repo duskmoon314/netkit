@@ -39,7 +39,7 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use crate::error::{CaptureError, CaptureResult};
 use crate::linktype::LinkType;
 use crate::packet::Packet;
-use crate::traits::{CaptureReader, CaptureWriter};
+use crate::{CaptureReader, CaptureWriter};
 
 /// Block type constants for pcapng.
 pub mod block_type {
@@ -303,12 +303,35 @@ impl<R: Read> PcapngReader<R> {
             user_appl: None,
         };
 
-        Ok(Self {
+        let mut pcapng_reader = Self {
             reader,
             big_endian,
             section,
             interfaces: Vec::new(),
-        })
+        };
+
+        // Peek at the next block type - if it's an IDB, process it immediately
+        // This allows linktype/snaplen to be available without iteration
+        use std::io::BufRead;
+        let peeked = pcapng_reader.reader.fill_buf()?;
+        if peeked.len() >= 4 {
+            let next_block_type = if big_endian {
+                u32::from_be_bytes([peeked[0], peeked[1], peeked[2], peeked[3]])
+            } else {
+                u32::from_le_bytes([peeked[0], peeked[1], peeked[2], peeked[3]])
+            };
+
+            // If the next block is an IDB, process it now
+            if next_block_type == block_type::IDB {
+                // Read block type and length
+                let _ = pcapng_reader.read_u32()?; // block type
+                let block_len = pcapng_reader.read_u32()?;
+                // Process the IDB
+                pcapng_reader.read_idb(block_len)?;
+            }
+        }
+
+        Ok(pcapng_reader)
     }
 
     /// Read a u16 with correct endianness.
@@ -509,9 +532,7 @@ impl<R: Read> PcapngReader<R> {
             ((ts * 1000) as i64, LinkType::default())
         };
 
-        Ok(Packet::new(timestamp_ns, orig_len, data)
-            .with_interface(interface_id)
-            .with_linktype(linktype))
+        Ok(Packet::new(timestamp_ns, orig_len, data, linktype).with_interface(interface_id))
     }
 
     /// Read Simple Packet Block.
@@ -538,9 +559,13 @@ impl<R: Read> PcapngReader<R> {
         self.reader.read_exact(&mut buf)?;
 
         // SPB uses interface 0 by default, no timestamp
-        let linktype = self.interfaces.first().map(|i| i.link_type).unwrap_or_default();
+        let linktype = self
+            .interfaces
+            .first()
+            .map(|i| i.link_type)
+            .unwrap_or_default();
 
-        Ok(Packet::new(0, orig_len, data).with_linktype(linktype))
+        Ok(Packet::new(0, orig_len, data, linktype))
     }
 
     /// Get the primary link type (from first interface).
@@ -773,7 +798,7 @@ mod tests {
         {
             let mut writer = PcapngWriter::new(&mut buffer, LinkType::Ethernet, 65535).unwrap();
 
-            let packet = Packet::new(1_500_000_000_000, 100, vec![0u8; 100]); // 1500 seconds in ns
+            let packet = Packet::new(1_500_000_000_000, 100, vec![0u8; 100], LinkType::Ethernet); // 1500 seconds in ns
             CaptureWriter::write_packet(&mut writer, &packet).unwrap();
             writer.flush().unwrap();
         }
@@ -791,9 +816,33 @@ mod tests {
 
         assert_eq!(packet.data.len(), 100);
         assert_eq!(packet.orig_len, 100);
-        assert_eq!(packet.linktype, Some(LinkType::Ethernet));
+        assert_eq!(packet.linktype, LinkType::Ethernet);
         // Timestamp should be preserved (within rounding)
         assert!((packet.timestamp_ns - 1_500_000_000_000).abs() < 1000);
+    }
+
+    #[test]
+    fn test_eager_idb_loading() {
+        use std::io::Cursor;
+
+        let mut buffer = Vec::new();
+
+        // Write a pcapng file with IDB immediately after SHB
+        {
+            let mut writer = PcapngWriter::new(&mut buffer, LinkType::Ethernet, 65535).unwrap();
+            let packet = Packet::new(1_500_000_000_000, 64, vec![0u8; 64], LinkType::Ethernet);
+            CaptureWriter::write_packet(&mut writer, &packet).unwrap();
+            writer.flush().unwrap();
+        }
+
+        // Read - the IDB should be processed immediately during open()
+        let cursor = Cursor::new(buffer);
+        let reader = PcapngReader::open(cursor).unwrap();
+
+        // Without calling next(), interfaces should already be populated
+        assert_eq!(reader.interfaces.len(), 1);
+        assert_eq!(reader.linktype(), LinkType::Ethernet);
+        assert_eq!(reader.snaplen(), 65535);
     }
 
     #[test]

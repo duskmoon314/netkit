@@ -30,7 +30,7 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use crate::error::{CaptureError, CaptureResult};
 use crate::linktype::LinkType;
 use crate::packet::Packet;
-use crate::traits::{CaptureReader, CaptureWriter};
+use crate::{CaptureReader, CaptureWriter};
 
 /// Magic numbers for pcap files.
 pub mod magic {
@@ -123,7 +123,7 @@ impl PcapPacketHeader {
         };
         let timestamp_ns = (self.ts_sec as i64) * 1_000_000_000 + (ts_nsec as i64);
 
-        Packet::new(timestamp_ns, self.orig_len, data).with_linktype(linktype)
+        Packet::new(timestamp_ns, self.orig_len, data, linktype)
     }
 
     /// Create from universal Packet with nanosecond flag.
@@ -160,8 +160,7 @@ impl Ord for PcapPacketHeader {
 
 /// Reader for pcap files.
 ///
-/// Implements both the legacy API (returning `(PcapPacketHeader, Vec<u8>)`) and
-/// the new [`CaptureReader`] trait (returning `Packet`).
+/// Implements the [`CaptureReader`] trait for reading packets.
 #[derive(Debug)]
 pub struct PcapReader<R: Read> {
     /// The pcap global header.
@@ -227,26 +226,10 @@ impl<R: Read> PcapReader<R> {
         })
     }
 
-    /// Create a new pcap reader (legacy API, panics on error).
+    /// Read the next packet header and data.
     ///
-    /// Use [`PcapReader::open`] for proper error handling.
-    pub fn new(reader: R) -> Self {
-        Self::open(reader).expect("Failed to open pcap file")
-    }
-
-    /// Read the next packet (legacy API).
-    ///
-    /// Returns `None` at end of file, panics on read errors.
-    pub fn next_packet(&mut self) -> Option<(PcapPacketHeader, Vec<u8>)> {
-        match self.try_next_packet() {
-            Ok(Some(pkt)) => Some(pkt),
-            Ok(None) => None,
-            Err(e) => panic!("Failed to read packet: {}", e),
-        }
-    }
-
-    /// Read the next packet with proper error handling.
-    pub fn try_next_packet(&mut self) -> CaptureResult<Option<(PcapPacketHeader, Vec<u8>)>> {
+    /// Returns `Ok(None)` at end of file.
+    fn read_packet_raw(&mut self) -> CaptureResult<Option<(PcapPacketHeader, Vec<u8>)>> {
         let mut buffer = [0u8; 16];
         match self.reader.read_exact(&mut buffer) {
             Ok(()) => {}
@@ -299,40 +282,15 @@ impl<R: Read> PcapReader<R> {
     }
 }
 
-/// Legacy iterator returning `(PcapPacketHeader, Vec<u8>)`.
+// Implement Iterator for CaptureReader trait
 impl<R: Read> Iterator for PcapReader<R> {
-    type Item = (PcapPacketHeader, Vec<u8>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next_packet()
-    }
-}
-
-/// Iterator adapter that implements [`CaptureReader`].
-pub struct PcapPacketIterator<R: Read> {
-    reader: PcapReader<R>,
-}
-
-impl<R: Read> PcapPacketIterator<R> {
-    /// Create a new packet iterator from a pcap reader.
-    pub fn new(reader: PcapReader<R>) -> Self {
-        Self { reader }
-    }
-
-    /// Get the underlying reader.
-    pub fn into_inner(self) -> PcapReader<R> {
-        self.reader
-    }
-}
-
-impl<R: Read> Iterator for PcapPacketIterator<R> {
     type Item = CaptureResult<Packet>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.reader.try_next_packet() {
+        match self.read_packet_raw() {
             Ok(Some((hdr, data))) => {
-                let linktype = self.reader.linktype();
-                Some(Ok(hdr.to_packet(data, self.reader.nanoseconds, linktype)))
+                let linktype = self.linktype();
+                Some(Ok(hdr.to_packet(data, self.nanoseconds, linktype)))
             }
             Ok(None) => None,
             Err(e) => Some(Err(e)),
@@ -340,24 +298,17 @@ impl<R: Read> Iterator for PcapPacketIterator<R> {
     }
 }
 
-impl<R: Read> CaptureReader for PcapPacketIterator<R> {
+impl<R: Read> CaptureReader for PcapReader<R> {
     fn linktype(&self) -> LinkType {
-        self.reader.linktype()
+        self.linktype()
     }
 
     fn snaplen(&self) -> u32 {
-        self.reader.snaplen()
+        self.snaplen()
     }
 
     fn is_nanosecond_precision(&self) -> bool {
-        self.reader.nanoseconds
-    }
-}
-
-impl<R: Read> PcapReader<R> {
-    /// Convert to a [`CaptureReader`] iterator.
-    pub fn into_capture_reader(self) -> PcapPacketIterator<R> {
-        PcapPacketIterator::new(self)
+        self.nanoseconds
     }
 }
 
@@ -453,8 +404,8 @@ impl<W: Write> PcapWriter<W> {
         Self::new(writer, true, true, snaplen, linktype)
     }
 
-    /// Write a packet using the legacy header format.
-    pub fn write_packet<T: AsRef<[u8]>>(
+    /// Write a packet using raw header and data.
+    pub fn write_packet_raw<T: AsRef<[u8]>>(
         &mut self,
         header: PcapPacketHeader,
         data: T,
@@ -502,7 +453,7 @@ impl<W: Write> PcapWriter<W> {
 impl<W: Write> CaptureWriter for PcapWriter<W> {
     fn write_packet(&mut self, packet: &Packet) -> CaptureResult<()> {
         let header = PcapPacketHeader::from_packet(packet, self.nanoseconds);
-        self.write_packet(header, &packet.data)
+        self.write_packet_raw(header, &packet.data)
     }
 
     fn flush(&mut self) -> CaptureResult<()> {
@@ -542,7 +493,7 @@ mod tests {
                 incl_len: 4,
                 orig_len: 4,
             };
-            writer.write_packet(header, &[1, 2, 3, 4]).unwrap();
+            writer.write_packet_raw(header, &[1, 2, 3, 4]).unwrap();
             writer.flush().unwrap();
         }
 
@@ -554,12 +505,12 @@ mod tests {
         assert_eq!(reader.snaplen(), 65535);
         assert!(!reader.nanoseconds);
 
-        let (hdr, data) = reader.next_packet().unwrap();
-        assert_eq!(hdr.ts_sec, 1234567890);
-        assert_eq!(hdr.ts_usec, 123456);
-        assert_eq!(data, vec![1, 2, 3, 4]);
+        let packet = reader.next().unwrap().unwrap();
+        assert_eq!(packet.ts_sec(), 1234567890);
+        assert_eq!(packet.ts_usec(), 123456);
+        assert_eq!(packet.data, vec![1, 2, 3, 4]);
 
-        assert!(reader.next_packet().is_none());
+        assert!(reader.next().is_none());
     }
 
     #[test]
@@ -576,7 +527,7 @@ mod tests {
         assert_eq!(packet.ts_sec(), 100);
         assert_eq!(packet.ts_usec(), 500_000);
         assert_eq!(packet.orig_len, 100);
-        assert_eq!(packet.linktype, Some(LinkType::Ethernet));
+        assert_eq!(packet.linktype, LinkType::Ethernet);
         assert!(packet.is_truncated());
 
         // Convert back
@@ -600,7 +551,7 @@ mod tests {
                 incl_len: 1,
                 orig_len: 1,
             };
-            writer.write_packet(header, &[0]).unwrap();
+            writer.write_packet_raw(header, &[0]).unwrap();
             writer.flush().unwrap();
         }
 
@@ -619,19 +570,18 @@ mod tests {
             let mut writer =
                 PcapWriter::new(&mut buffer, false, false, 65535, LinkType::Ethernet).unwrap();
 
-            let packet = Packet::new(1_500_000_000, 4, vec![1, 2, 3, 4]); // 1.5 seconds
+            let packet = Packet::new(1_500_000_000, 4, vec![1, 2, 3, 4], LinkType::Ethernet); // 1.5 seconds
             CaptureWriter::write_packet(&mut writer, &packet).unwrap();
             CaptureWriter::flush(&mut writer).unwrap();
         }
 
         // Read using CaptureReader trait
         let cursor = Cursor::new(buffer);
-        let reader = PcapReader::open(cursor).unwrap();
-        let mut capture_reader = reader.into_capture_reader();
+        let mut reader = PcapReader::open(cursor).unwrap();
 
-        assert_eq!(CaptureReader::linktype(&capture_reader), LinkType::Ethernet);
+        assert_eq!(CaptureReader::linktype(&reader), LinkType::Ethernet);
 
-        let packet = capture_reader.next().unwrap().unwrap();
+        let packet = reader.next().unwrap().unwrap();
         assert_eq!(packet.ts_sec(), 1);
         assert_eq!(packet.ts_usec(), 500_000);
         assert_eq!(packet.data, vec![1, 2, 3, 4]);

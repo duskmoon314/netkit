@@ -6,7 +6,8 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use indicatif_log_bridge::LogWrapper;
 use log::debug;
 use netkit::{
-    capture::file::pcap::{PcapReader, PcapWriter},
+    capture::CaptureWriter,
+    capture::format::pcap::{PcapReader, PcapWriter},
     packet::prelude::*,
 };
 use rand::{SeedableRng, rngs::StdRng, seq::IndexedRandom};
@@ -90,13 +91,14 @@ fn main() -> anyhow::Result<()> {
     ));
     pg.enable_steady_tick(Duration::from_secs(1));
 
-    let rdr = PcapReader::new(File::open(&args.input)?);
+    let rdr = PcapReader::open(File::open(&args.input)?)?;
 
     let mut wtr = PcapWriter::new(
         File::create(&args.output)?,
         rdr.big_endian,
         rdr.nanoseconds,
         rdr.snaplen(),
+        rdr.linktype(),
     )?;
 
     let mut rng = StdRng::seed_from_u64(args.seed);
@@ -117,8 +119,9 @@ fn main() -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>();
 
-    for (hdr, data) in pg.wrap_iter(rdr) {
-        let mut eth = Eth::new(data)?;
+    for result in pg.wrap_iter(rdr) {
+        let mut packet = result?;
+        let mut eth = Eth::new(&mut packet.data)?;
 
         if let Some(mut ipv4) = eth.ipv4_mut() {
             ipv4.dst_mut()
@@ -127,7 +130,7 @@ fn main() -> anyhow::Result<()> {
                 ))?);
         }
 
-        wtr.write_packet(hdr, eth.inner())?;
+        wtr.write_packet(&packet)?;
     }
 
     Ok(())

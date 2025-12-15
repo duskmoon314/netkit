@@ -31,21 +31,21 @@ pub struct Packet {
     pub interface_id: u32,
 
     /// Linktype of the packet data.
-    pub linktype: Option<LinkType>,
+    pub linktype: LinkType,
 
     /// Optional packet metadata.
     pub metadata: Option<PacketMetadata>,
 }
 
 impl Packet {
-    /// Create a new packet with the given timestamp, length, and data.
-    pub fn new(timestamp_ns: i64, orig_len: u32, data: Vec<u8>) -> Self {
+    /// Create a new packet with the given timestamp, length, data, and linktype.
+    pub fn new(timestamp_ns: i64, orig_len: u32, data: Vec<u8>, linktype: LinkType) -> Self {
         Self {
             timestamp_ns,
             orig_len,
             data,
             interface_id: 0,
-            linktype: None,
+            linktype,
             metadata: None,
         }
     }
@@ -58,7 +58,7 @@ impl Packet {
 
     /// Create a packet with linktype.
     pub fn with_linktype(mut self, linktype: LinkType) -> Self {
-        self.linktype = Some(linktype);
+        self.linktype = linktype;
         self
     }
 
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn test_packet_timestamps() {
         // 1 second + 500ms = 1.5 seconds
-        let pkt = Packet::new(1_500_000_000, 100, vec![0; 100]);
+        let pkt = Packet::new(1_500_000_000, 100, vec![0; 100], LinkType::Ethernet);
 
         assert_eq!(pkt.ts_sec(), 1);
         assert_eq!(pkt.ts_nsec(), 500_000_000);
@@ -209,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_packet_truncation() {
-        let pkt = Packet::new(0, 1500, vec![0; 100]);
+        let pkt = Packet::new(0, 1500, vec![0; 100], LinkType::Ethernet);
 
         assert!(pkt.is_truncated());
         assert_eq!(pkt.captured_len(), 100);
@@ -218,9 +218,9 @@ mod tests {
 
     #[test]
     fn test_packet_ordering() {
-        let pkt1 = Packet::new(1000, 100, vec![]);
-        let pkt2 = Packet::new(2000, 100, vec![]);
-        let pkt3 = Packet::new(1000, 200, vec![]);
+        let pkt1 = Packet::new(1000, 100, vec![], LinkType::Ethernet);
+        let pkt2 = Packet::new(2000, 100, vec![], LinkType::Ethernet);
+        let pkt3 = Packet::new(1000, 200, vec![], LinkType::Ethernet);
 
         assert!(pkt1 < pkt2);
         assert_eq!(pkt1.cmp(&pkt3), std::cmp::Ordering::Equal);

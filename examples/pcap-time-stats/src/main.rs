@@ -5,7 +5,7 @@ use clap::Parser;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use indicatif_log_bridge::LogWrapper;
 use log::{debug, info};
-use netkit::capture::file::pcap::PcapReader;
+use netkit::capture::format::pcap::PcapReader;
 use serde::Serialize;
 
 /// pcap-time-stats (netkit)
@@ -65,7 +65,7 @@ fn main() -> anyhow::Result<()> {
 
     debug!("Args: {:?}", args);
 
-    let reader = PcapReader::new(File::open(&args.input)?);
+    let reader = PcapReader::open(File::open(&args.input)?)?;
 
     let pg = multi.add(ProgressBar::no_length());
     pg.set_style(ProgressStyle::with_template(
@@ -74,18 +74,15 @@ fn main() -> anyhow::Result<()> {
     pg.set_message(args.input.display().to_string());
     pg.enable_steady_tick(Duration::from_secs(1));
 
-    let nanoseconds = reader.nanoseconds;
+    let _nanoseconds = reader.nanoseconds;
     let duration: TimeDelta = TimeDelta::from_std(args.duration.into())?;
 
     let mut results: HashMap<DateTime<Utc>, Stats> = HashMap::new();
 
-    for (header, _data) in pg.wrap_iter(reader) {
-        let mut sec = header.ts_sec;
-        let mut nsec = if nanoseconds {
-            header.ts_usec
-        } else {
-            header.ts_usec * 1000
-        };
+    for result in pg.wrap_iter(reader) {
+        let packet = result?;
+        let mut sec = packet.ts_sec();
+        let mut nsec = packet.ts_nsec();
 
         if nsec >= 1_000_000_000 {
             sec += nsec / 1_000_000_000;
@@ -94,12 +91,12 @@ fn main() -> anyhow::Result<()> {
 
         let date_time = DateTime::from_timestamp(sec as i64, nsec)
             .ok_or(anyhow::anyhow!(
-                "Invalid timestamp in packet header: {:?}",
-                header
+                "Invalid timestamp in packet: {:?}",
+                packet.timestamp_ns
             ))?
             .duration_round(duration)?;
 
-        let bytes = header.orig_len as usize;
+        let bytes = packet.orig_len as usize;
 
         results
             .entry(date_time)

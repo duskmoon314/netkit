@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 use chrono::{DateTime, Utc};
 use clap::{Args, Parser, ValueEnum};
 use log::{debug, error, info};
-use netkit::capture::file::pcap::PcapReader;
-use netkit::capture::linktype::LinkType;
+use netkit::capture::format::pcap::PcapReader;
+use netkit::capture::LinkType;
 use netkit::packet::prelude::*;
 use polars::prelude::*;
 
@@ -276,7 +276,7 @@ fn process_packet<'a>(
 fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> anyhow::Result<()> {
     let file = std::fs::File::open(file_path.clone())?;
     let file_size = file.metadata()?.len();
-    let reader = PcapReader::new(file);
+    let reader = PcapReader::open(file)?;
 
     debug!("Pcap header: {:X?}", reader.header);
 
@@ -317,18 +317,19 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
     let mut batch = PacketBatch::new(args.dump_batch);
     let mut batch_count = 0;
 
-    for (hdr, data) in reader.by_ref() {
+    for result in reader.by_ref() {
+        let packet = result?;
         stats.total_packets += 1;
-        stats.total_bytes += hdr.orig_len as u64;
+        stats.total_bytes += packet.orig_len as u64;
 
-        let ts = hdr.ts_sec as i64 * time_scale + hdr.ts_usec as i64;
+        let ts = packet.ts_sec() as i64 * time_scale + packet.ts_usec() as i64;
         if stats.first_timestamp.is_none() {
             stats.first_timestamp = Some(ts);
         }
         stats.last_timestamp = Some(ts);
 
         // Process packet based on link type
-        let (eth_type, ip_data) = match process_packet(linktype, &data, &mut stats) {
+        let (eth_type, ip_data) = match process_packet(linktype, &packet.data, &mut stats) {
             Some(result) => result,
             None => continue,
         };
@@ -380,7 +381,7 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
             if args.dump.is_some() {
                 batch.push(
                     ts,
-                    hdr.orig_len,
+                    packet.orig_len,
                     eth_type,
                     src_addr,
                     dst_addr,

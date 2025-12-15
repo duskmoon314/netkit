@@ -18,7 +18,7 @@ use crate::prelude::IpProtocol;
 /// - 4-tuple-sym: Ip address pair + Src Port + Dst Port (src/dst interchangeable)
 /// - 5-tuple: Src Ip address + Dst Ip address + Src Port + Dst Port + Protocol
 /// - 5-tuple-sym: Ip address pair + Src Port + Dst Port + Protocol (src/dst interchangeable)
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Copy)]
 pub enum FlowId {
     /// Single Ip address
     Ip(IpAddr),
@@ -192,6 +192,97 @@ impl PartialEq for FlowId {
 }
 
 impl Eq for FlowId {}
+
+impl std::hash::Hash for FlowId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        use FlowId::*;
+
+        // For symmetric variants, normalize the ordering before hashing
+        // to ensure that Tuple2Sym(A, B) and Tuple2Sym(B, A) hash to the same value
+        match self {
+            Ip(addr) => {
+                0u8.hash(state);
+                addr.hash(state);
+            }
+            Tuple2(src, dst) => {
+                1u8.hash(state);
+                src.hash(state);
+                dst.hash(state);
+            }
+            Tuple2Sym(src, dst) => {
+                2u8.hash(state);
+                if src <= dst {
+                    src.hash(state);
+                    dst.hash(state);
+                } else {
+                    dst.hash(state);
+                    src.hash(state);
+                }
+            }
+            Tuple3(src, dst, proto) => {
+                3u8.hash(state);
+                src.hash(state);
+                dst.hash(state);
+                proto.hash(state);
+            }
+            Tuple3Sym(src, dst, proto) => {
+                4u8.hash(state);
+                if src <= dst {
+                    src.hash(state);
+                    dst.hash(state);
+                } else {
+                    dst.hash(state);
+                    src.hash(state);
+                }
+                proto.hash(state);
+            }
+            Tuple4(src, dst, sport, dport) => {
+                5u8.hash(state);
+                src.hash(state);
+                dst.hash(state);
+                sport.hash(state);
+                dport.hash(state);
+            }
+            Tuple4Sym(src, dst, sport, dport) => {
+                6u8.hash(state);
+                if src <= dst {
+                    src.hash(state);
+                    dst.hash(state);
+                    sport.hash(state);
+                    dport.hash(state);
+                } else {
+                    dst.hash(state);
+                    src.hash(state);
+                    dport.hash(state);
+                    sport.hash(state);
+                }
+            }
+            Tuple5(src, dst, sport, dport, proto) => {
+                7u8.hash(state);
+                src.hash(state);
+                dst.hash(state);
+                sport.hash(state);
+                dport.hash(state);
+                proto.hash(state);
+            }
+            Tuple5Sym(src, dst, sport, dport, proto) => {
+                8u8.hash(state);
+                if src <= dst {
+                    src.hash(state);
+                    dst.hash(state);
+                    sport.hash(state);
+                    dport.hash(state);
+                } else {
+                    dst.hash(state);
+                    src.hash(state);
+                    dport.hash(state);
+                    sport.hash(state);
+                }
+                proto.hash(state);
+            }
+        }
+    }
+}
 
 impl From<IpAddr> for FlowId {
     fn from(addr: IpAddr) -> Self {

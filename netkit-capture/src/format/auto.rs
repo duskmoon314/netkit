@@ -29,7 +29,7 @@ use crate::format::pcap::{self, PcapReader};
 use crate::format::pcapng::{self, PcapngReader};
 use crate::linktype::LinkType;
 use crate::packet::Packet;
-use crate::traits::CaptureReader;
+use crate::CaptureReader;
 
 /// Detected capture file format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,7 +108,7 @@ pub fn detect_format_from_magic(magic: [u8; 4]) -> CaptureResult<CaptureFormat> 
 /// through the [`CaptureReader`] trait.
 pub enum CaptureFile<R: Read> {
     /// Classic pcap format
-    Pcap(pcap::PcapPacketIterator<R>),
+    Pcap(PcapReader<R>),
     /// Pcapng format
     Pcapng(PcapngReader<R>),
 }
@@ -124,7 +124,7 @@ impl<R: Read + Seek> CaptureFile<R> {
         match format {
             CaptureFormat::Pcap => {
                 let pcap_reader = PcapReader::open(reader)?;
-                Ok(CaptureFile::Pcap(pcap_reader.into_capture_reader()))
+                Ok(CaptureFile::Pcap(pcap_reader))
             }
             CaptureFormat::Pcapng => {
                 let pcapng_reader = PcapngReader::open(reader)?;
@@ -237,7 +237,7 @@ mod tests {
     use super::*;
     use crate::format::pcap::PcapWriter;
     use crate::format::pcapng::PcapngWriter;
-    use crate::traits::CaptureWriter;
+    use crate::CaptureWriter;
     use std::io::Cursor;
 
     #[test]
@@ -246,7 +246,7 @@ mod tests {
         {
             let mut writer =
                 PcapWriter::new(&mut buffer, false, false, 65535, LinkType::Ethernet).unwrap();
-            let packet = Packet::new(1_000_000_000, 10, vec![0u8; 10]);
+            let packet = Packet::new(1_000_000_000, 10, vec![0u8; 10], LinkType::Ethernet);
             CaptureWriter::write_packet(&mut writer, &packet).unwrap();
             writer.flush().unwrap();
         }
@@ -261,7 +261,7 @@ mod tests {
         let mut buffer = Vec::new();
         {
             let mut writer = PcapngWriter::new(&mut buffer, LinkType::Ethernet, 65535).unwrap();
-            let packet = Packet::new(1_000_000_000, 10, vec![0u8; 10]);
+            let packet = Packet::new(1_000_000_000, 10, vec![0u8; 10], LinkType::Ethernet);
             CaptureWriter::write_packet(&mut writer, &packet).unwrap();
             writer.flush().unwrap();
         }
@@ -277,7 +277,7 @@ mod tests {
         {
             let mut writer =
                 PcapWriter::new(&mut buffer, false, false, 65535, LinkType::Ethernet).unwrap();
-            let packet = Packet::new(1_000_000_000, 10, vec![0u8; 10]);
+            let packet = Packet::new(1_000_000_000, 10, vec![0u8; 10], LinkType::Ethernet);
             CaptureWriter::write_packet(&mut writer, &packet).unwrap();
             writer.flush().unwrap();
         }
@@ -298,7 +298,7 @@ mod tests {
         let mut buffer = Vec::new();
         {
             let mut writer = PcapngWriter::new(&mut buffer, LinkType::Ethernet, 65535).unwrap();
-            let packet = Packet::new(1_000_000_000, 10, vec![0u8; 10]);
+            let packet = Packet::new(1_000_000_000, 10, vec![0u8; 10], LinkType::Ethernet);
             CaptureWriter::write_packet(&mut writer, &packet).unwrap();
             writer.flush().unwrap();
         }

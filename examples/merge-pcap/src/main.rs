@@ -5,8 +5,12 @@ use anyhow::anyhow;
 use clap::{ArgAction, Parser};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use indicatif_log_bridge::LogWrapper;
+use log::error;
 use log::{debug, info};
-use netkit::capture::file::pcap::{PacketHeader, PcapReader, PcapWriter};
+use netkit::capture::CaptureWriter;
+use netkit::capture::LinkType;
+use netkit::capture::format::pcap::{PcapReader, PcapWriter};
+use netkit::capture::packet::Packet;
 use netkit::packet::prelude::*;
 use rand::seq::IndexedRandom;
 use rand::{SeedableRng, rngs::StdRng};
@@ -155,7 +159,7 @@ impl InputFile {
     }
 
     fn into_iter(self, cli: &Cli, pg: ProgressBar) -> InputFileIterator {
-        let reader = PcapReader::new(File::open(&self.path).unwrap());
+        let reader = PcapReader::open(File::open(&self.path).unwrap()).unwrap();
 
         let src_ip_pool = self
             .srcipmap
@@ -222,12 +226,20 @@ struct InputFileIterator {
 }
 
 impl Iterator for InputFileIterator {
-    type Item = Vec<(PacketHeader, Vec<u8>)>;
+    type Item = Vec<Packet>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut item = loop {
-            match self.reader.next_packet() {
-                Some(item) => break item,
+        let mut packet = loop {
+            match self.reader.next() {
+                Some(Ok(pkt)) => break pkt,
+                Some(Err(e)) => {
+                    error!(
+                        "Error reading packet from {}: {}",
+                        self.file.path.display(),
+                        e
+                    );
+                    continue;
+                } // Skip errors
                 None => {
                     self.current += 1;
 
@@ -238,7 +250,7 @@ impl Iterator for InputFileIterator {
                         return None;
                     }
 
-                    self.reader = PcapReader::new(File::open(&self.file.path).unwrap());
+                    self.reader = PcapReader::open(File::open(&self.file.path).unwrap()).unwrap();
                     self.first_packet_time = None;
                 }
             }
@@ -250,41 +262,39 @@ impl Iterator for InputFileIterator {
             1_000_000
         };
 
-        // let temp_last_packet_time = self.last_packet_time;
-        // self.last_packet_time = (item.0.ts_sec, item.0.ts_usec);
+        let ts_sec = packet.ts_sec();
+        let ts_usec = packet.ts_usec();
 
         if self.first_packet_time.is_none() {
             // A new start of pcap, may be repeat or a new group
+            self.original_first_packet_time = Some(ts_sec as u64 * time_scale + ts_usec as u64);
 
-            // self.first_packet_time = Some((item.0.ts_sec, item.0.ts_usec));
-            self.original_first_packet_time =
-                Some(item.0.ts_sec as u64 * time_scale + item.0.ts_usec as u64);
-
-            if self.current % self.file.repeat == 0 {
+            let new_ts_sec;
+            let new_ts_usec;
+            if self.current.is_multiple_of(self.file.repeat) {
                 // A new group
-
                 if self.erase_timestamp {
-                    item.0.ts_sec =
+                    new_ts_sec =
                         self.file.start_time[(self.current / self.file.repeat) as usize] as u32;
-                    item.0.ts_usec = 0;
+                    new_ts_usec = 0;
                 } else {
-                    item.0.ts_sec = (item.0.ts_sec as i32
+                    new_ts_sec = (ts_sec as i32
                         + self.file.start_time[(self.current / self.file.repeat) as usize])
                         as u32;
+                    new_ts_usec = ts_usec;
                 }
             } else {
                 // same group, repeating
-
-                item.0.ts_sec = self.last_packet_time.0 + 1;
-                item.0.ts_usec = 0;
+                new_ts_sec = self.last_packet_time.0 + 1;
+                new_ts_usec = 0;
             }
 
-            self.first_packet_time = Some((item.0.ts_sec, item.0.ts_usec));
+            self.first_packet_time = Some((new_ts_sec, new_ts_usec));
+            packet.timestamp_ns = (new_ts_sec as i64) * 1_000_000_000 + (new_ts_usec as i64) * 1000;
         } else {
             // Same group same repeat subgroup
             // Calculate the time offset
-
-            let current_packet_time = item.0.ts_sec as u64 * time_scale + item.0.ts_usec as u64;
+            let current_packet_time = ts_sec as u64 * time_scale + ts_usec as u64;
             let first_packet_time = self
                 .first_packet_time
                 .map(|(sec, usec)| sec as u64 * time_scale + usec as u64)
@@ -296,28 +306,31 @@ impl Iterator for InputFileIterator {
                     .expect("No first packet time")
                 + first_packet_time;
 
-            item.0.ts_sec = (current_packet_time / time_scale) as u32;
-            item.0.ts_usec = (current_packet_time % time_scale) as u32;
+            let new_ts_sec = (current_packet_time / time_scale) as u32;
+            let new_ts_usec = (current_packet_time % time_scale) as u32;
+            packet.timestamp_ns = (new_ts_sec as i64) * 1_000_000_000 + (new_ts_usec as i64) * 1000;
         }
 
-        self.last_packet_time = (item.0.ts_sec, item.0.ts_usec);
+        self.last_packet_time = (packet.ts_sec(), packet.ts_usec());
 
-        match (self.nanoseconds, self.reader.nanoseconds) {
-            (true, false) => item.0.ts_usec *= 1000,
-            (false, true) => item.0.ts_usec /= 1000,
-            _ => {}
-        }
+        // // Adjust timestamp precision if needed
+        // if !self.nanoseconds && self.reader.nanoseconds {
+        //     // Convert from ns to us
+        //     packet.timestamp_ns = (packet.timestamp_ns / 1000) * 1000;
+        // } else if self.nanoseconds && !self.reader.nanoseconds {
+        //     // Already in ns, no change needed
+        // }
 
         self.pg.inc(1);
 
-        let mut items = vec![item; self.file.parallel as usize];
+        let mut items = vec![packet; self.file.parallel as usize];
 
         if self.src_ip_pool.is_empty() && self.dst_ip_pool.is_empty() {
             return Some(items);
         }
 
         for item in items.iter_mut() {
-            let mut eth = Eth::new(&mut item.1).expect("Failed to parse Ethernet header");
+            let mut eth = Eth::new(&mut item.data).expect("Failed to parse Ethernet header");
 
             let mut ipv4 = match eth.ipv4_mut() {
                 Some(ipv4) => ipv4,
@@ -349,8 +362,7 @@ impl Iterator for InputFileIterator {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PacketHeapItem {
     index: usize,
-    header: PacketHeader,
-    data: Vec<u8>,
+    packet: Packet,
 }
 
 impl PartialOrd for PacketHeapItem {
@@ -361,11 +373,8 @@ impl PartialOrd for PacketHeapItem {
 
 impl Ord for PacketHeapItem {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.header.ts_sec == other.header.ts_sec {
-            self.header.ts_usec.cmp(&other.header.ts_usec).reverse()
-        } else {
-            self.header.ts_sec.cmp(&other.header.ts_sec).reverse()
-        }
+        // Reverse ordering for min-heap
+        other.packet.timestamp_ns.cmp(&self.packet.timestamp_ns)
     }
 }
 
@@ -426,6 +435,7 @@ fn main() -> anyhow::Result<()> {
         false,
         args.nanoseconds.unwrap_or(false),
         args.snaplen.unwrap_or(65535),
+        LinkType::Ethernet,
     )
     .map_err(|e| anyhow!("Failed to create pcap writer: {}", e))?;
 
@@ -451,13 +461,10 @@ fn main() -> anyhow::Result<()> {
             // packet_heap.push(PacketHeapItem {
             //     index: i,
             //     header: item.0,
-            //     data: item.1,
-            // });
-            packet_heap.extend(item.into_iter().map(|(header, data)| PacketHeapItem {
-                index: i,
-                header,
-                data,
-            }));
+            packet_heap.extend(
+                item.into_iter()
+                    .map(|packet| PacketHeapItem { index: i, packet }),
+            );
         }
     }
 
@@ -469,17 +476,16 @@ fn main() -> anyhow::Result<()> {
         let input_file = &mut input_files[item.index];
 
         pcap_writer
-            .write_packet(item.header, &item.data)
+            .write_packet(&item.packet)
             .map_err(|e| anyhow!("Failed to write packet: {}", e))?;
 
         if packet_heap.len() < args.input_files.len() {
             write_pg.inc(1);
 
             if let Some(next_item) = input_file.next() {
-                packet_heap.extend(next_item.into_iter().map(|(header, data)| PacketHeapItem {
+                packet_heap.extend(next_item.into_iter().map(|packet| PacketHeapItem {
                     index: item.index,
-                    header,
-                    data,
+                    packet,
                 }));
             }
         }

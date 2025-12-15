@@ -7,8 +7,8 @@ use clap::{Parser, ValueEnum};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use indicatif_log_bridge::LogWrapper;
 use log::{debug, info};
-use netkit::capture::file::pcap::{PacketHeader, PcapReader, PcapWriter};
-use netkit::capture::linktype::LinkType;
+use netkit::capture::format::pcap::PcapWriter;
+use netkit::capture::{CaptureReader, LinkType, Packet, open_file};
 use netkit::packet::layer::eth;
 use netkit::packet::layer::ip::protocol::IpProtocol;
 use netkit::packet::prelude::*;
@@ -40,11 +40,11 @@ enum SplitGranularity {
 
 /// pcap-split (netkit)
 ///
-/// Split a pcap file into multiple smaller pcap files based on specified granularity.
+/// Split a pcap/pcapng file into multiple smaller pcap files based on specified granularity.
 #[derive(Debug, Parser)]
 #[command(version, about, long_about)]
 struct Cli {
-    /// Input pcap file
+    /// Input capture file (pcap or pcapng)
     input: PathBuf,
 
     /// Output directory for split pcap files
@@ -227,15 +227,15 @@ fn main() -> anyhow::Result<()> {
         std::fs::create_dir_all(&args.output)?;
     }
 
-    // Open input pcap file
-    let file = File::open(&args.input)?;
-    let reader = PcapReader::new(file);
+    // Open input capture file (auto-detects pcap/pcapng)
+    let reader = open_file(&args.input)?;
 
-    let linktype: LinkType = reader.header.network.into();
-    let big_endian = reader.big_endian;
-    let nanoseconds = reader.nanoseconds;
+    let linktype = reader.linktype();
+    let nanoseconds = reader.is_nanosecond_precision();
     let snaplen = reader.snaplen();
 
+    info!("Input format: {}", reader.format_name());
+    info!("Link type: {}", linktype);
     debug!("Cli arguments: {:?}", args);
 
     info!(
@@ -251,11 +251,12 @@ fn main() -> anyhow::Result<()> {
     }
 
     if args.two_pass {
-        // Two-pass mode: first count, then extract
-        two_pass_split(args, linktype, big_endian, nanoseconds, snaplen, multi)?;
+        // Two-pass mode needs to read file twice, drop reader first
+        drop(reader);
+        two_pass_split(args, linktype, nanoseconds, snaplen, multi)?;
     } else {
-        // Single-pass mode: store all packets in memory
-        single_pass_split(args, linktype, big_endian, nanoseconds, snaplen, multi)?;
+        // Single-pass mode: pass reader directly
+        single_pass_split(args, reader, nanoseconds, snaplen, multi)?;
     }
 
     Ok(())
@@ -264,14 +265,12 @@ fn main() -> anyhow::Result<()> {
 /// Single-pass mode: store all packets in memory, then sort and write
 fn single_pass_split(
     args: Cli,
-    linktype: LinkType,
-    big_endian: bool,
+    reader: netkit::capture::CaptureFile<std::io::BufReader<File>>,
     nanoseconds: bool,
     snaplen: u32,
     multi: MultiProgress,
 ) -> anyhow::Result<()> {
-    let file = File::open(&args.input)?;
-    let reader = PcapReader::new(file);
+    let linktype = reader.linktype();
 
     // Setup progress bar
     let pg = multi.add(ProgressBar::new_spinner().with_finish(indicatif::ProgressFinish::Abandon));
@@ -281,19 +280,18 @@ fn single_pass_split(
     pg.set_message(args.input.display().to_string());
     pg.enable_steady_tick(Duration::from_secs(1));
 
-    // Map of flow keys to packets
-    let mut flows: HashMap<FlowKey, LinkedList<(PacketHeader, Vec<u8>)>> = HashMap::new();
+    // Map of flow keys to packets (using universal Packet type)
+    let mut flows: HashMap<FlowKey, LinkedList<Packet>> = HashMap::new();
     let mut total_packets = 0u64;
     let mut skipped_packets = 0u64;
     let mut written_packets = 0u64;
 
-    let reader = pg.wrap_iter(reader);
-
-    for (hdr, data) in reader {
+    for result in pg.wrap_iter(reader) {
+        let packet = result?;
         total_packets += 1;
 
         // Extract flow info
-        let flow_info = match process_packet(linktype, &data) {
+        let flow_info = match process_packet(linktype, &packet.data) {
             Some(info) => info,
             None => {
                 debug!("Skipping non-IPv4 or malformed packet");
@@ -313,7 +311,7 @@ fn single_pass_split(
 
         // Append the packet into the corresponding flow, or create new flow
         let packet_list = flows.entry(flow_key).or_default();
-        packet_list.push_back((hdr, data));
+        packet_list.push_back(packet);
     }
 
     // Write flows to files
@@ -357,13 +355,13 @@ fn single_pass_split(
         let filepath = args.output.join(&filename);
         let file = File::create(&filepath).expect("Failed to create output file");
         debug!("Created output file: {}", filename);
-        let mut writer = PcapWriter::new(file, big_endian, nanoseconds, snaplen, linktype)
+        let mut writer = PcapWriter::new(file, false, nanoseconds, snaplen, linktype)
             .expect("Failed to create PcapWriter");
 
         written_packets += packet_list.len() as u64;
 
-        for (hdr, data) in packet_list {
-            writer.write_packet(hdr, data)?;
+        for packet in packet_list {
+            netkit::capture::CaptureWriter::write_packet(&mut writer, &packet)?;
         }
 
         writer.flush()?;
@@ -392,7 +390,6 @@ fn single_pass_split(
 fn two_pass_split(
     args: Cli,
     linktype: LinkType,
-    big_endian: bool,
     nanoseconds: bool,
     snaplen: u32,
     multi: MultiProgress,
@@ -400,8 +397,7 @@ fn two_pass_split(
     info!("Pass 1/2: Counting packets per flow...");
 
     // First pass: count packets per flow
-    let file = File::open(&args.input)?;
-    let reader = PcapReader::new(file);
+    let reader = open_file(&args.input)?;
 
     let pg = multi.add(ProgressBar::new_spinner().with_finish(indicatif::ProgressFinish::Abandon));
     pg.set_style(ProgressStyle::with_template(
@@ -414,13 +410,12 @@ fn two_pass_split(
     let mut total_packets = 0u64;
     let mut skipped_packets = 0u64;
 
-    let reader = pg.wrap_iter(reader);
-
-    for (_hdr, data) in reader {
+    for result in pg.wrap_iter(reader) {
+        let packet = result?;
         total_packets += 1;
 
         // Extract flow info
-        let flow_info = match process_packet(linktype, &data) {
+        let flow_info = match process_packet(linktype, &packet.data) {
             Some(info) => info,
             None => {
                 skipped_packets += 1;
@@ -461,8 +456,7 @@ fn two_pass_split(
     info!("Pass 2/2: Extracting {} flows...", selected_flows.len());
 
     // Second pass: extract only selected flows
-    let file = File::open(&args.input)?;
-    let reader = PcapReader::new(file);
+    let reader = open_file(&args.input)?;
 
     let pg = multi.add(ProgressBar::new_spinner().with_finish(indicatif::ProgressFinish::Abandon));
     pg.set_style(ProgressStyle::with_template(
@@ -475,11 +469,11 @@ fn two_pass_split(
     let mut packet_counts: HashMap<FlowKey, u64> = HashMap::new();
     let mut written_packets = 0u64;
 
-    let reader = pg.wrap_iter(reader);
+    for result in pg.wrap_iter(reader) {
+        let packet = result?;
 
-    for (hdr, data) in reader {
         // Extract flow info
-        let flow_info = match process_packet(linktype, &data) {
+        let flow_info = match process_packet(linktype, &packet.data) {
             Some(info) => info,
             None => continue,
         };
@@ -504,12 +498,12 @@ fn two_pass_split(
             let filepath = args.output.join(&filename);
             let file = File::create(&filepath).expect("Failed to create output file");
             debug!("Created output file: {}", filename);
-            PcapWriter::new(file, big_endian, nanoseconds, snaplen, linktype)
+            PcapWriter::new(file, false, nanoseconds, snaplen, linktype)
                 .expect("Failed to create PcapWriter")
         });
 
-        // Write packet
-        writer.write_packet(hdr, &data)?;
+        // Write packet using CaptureWriter trait
+        netkit::capture::CaptureWriter::write_packet(writer, &packet)?;
         *packet_counts.entry(flow_key).or_insert(0) += 1;
         written_packets += 1;
     }
