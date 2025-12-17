@@ -81,22 +81,20 @@ where
 
     /// Get the accessor of the destination MAC address.
     #[inline]
-    pub fn dst(&self) -> &Field<EthAddrSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_DST].as_ptr() as *const Field<EthAddrSpec>) }
+    pub fn dst(&self) -> FieldRef<'_, EthAddrSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_DST])
     }
 
     /// Get the accessor of the source MAC address.
     #[inline]
-    pub fn src(&self) -> &Field<EthAddrSpec> {
-        unsafe { &*(self.data.as_ref()[Self::FIELD_SRC].as_ptr() as *const Field<EthAddrSpec>) }
+    pub fn src(&self) -> FieldRef<'_, EthAddrSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_SRC])
     }
 
     /// Get the accessor of the Eth type.
     #[inline]
-    pub fn eth_type(&self) -> &Field<EthTypeSpec> {
-        unsafe {
-            &*(self.data.as_ref()[Self::FIELD_ETH_TYPE].as_ptr() as *const Field<EthTypeSpec>)
-        }
+    pub fn eth_type(&self) -> FieldRef<'_, EthTypeSpec> {
+        FieldRef::new(&self.data.as_ref()[Self::FIELD_ETH_TYPE])
     }
 
     /// Get the payload.
@@ -109,6 +107,8 @@ where
     pub fn ipv4(&self) -> Option<Ipv4<&[u8]>> {
         if self.eth_type().get() == EthType::Ipv4 {
             Ipv4::new(self.payload()).ok()
+        } else if self.eth_type().get() == EthType::Vlan {
+            Vlan::<&[u8]>::ipv4_from_bytes(self.payload())
         } else {
             None
         }
@@ -127,26 +127,20 @@ where
 
     /// Get the mutable accessor of the destination MAC address.
     #[inline]
-    pub fn dst_mut(&mut self) -> &mut Field<EthAddrSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_DST].as_mut_ptr() as *mut Field<EthAddrSpec>)
-        }
+    pub fn dst_mut(&mut self) -> FieldMut<'_, EthAddrSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_DST])
     }
 
     /// Get the mutable accessor of the source MAC address.
     #[inline]
-    pub fn src_mut(&mut self) -> &mut Field<EthAddrSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_SRC].as_mut_ptr() as *mut Field<EthAddrSpec>)
-        }
+    pub fn src_mut(&mut self) -> FieldMut<'_, EthAddrSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_SRC])
     }
 
     /// Get the mutable accessor of the Eth type.
     #[inline]
-    pub fn eth_type_mut(&mut self) -> &mut Field<EthTypeSpec> {
-        unsafe {
-            &mut *(self.data.as_mut()[Self::FIELD_ETH_TYPE].as_mut_ptr() as *mut Field<EthTypeSpec>)
-        }
+    pub fn eth_type_mut(&mut self) -> FieldMut<'_, EthTypeSpec> {
+        FieldMut::new(&mut self.data.as_mut()[Self::FIELD_ETH_TYPE])
     }
 
     /// Get the mutable payload.
@@ -159,6 +153,8 @@ where
     pub fn ipv4_mut(&mut self) -> Option<Ipv4<&mut [u8]>> {
         if self.eth_type().get() == EthType::Ipv4 {
             Ipv4::new(self.payload_mut()).ok()
+        } else if self.eth_type().get() == EthType::Vlan {
+            Vlan::<&mut [u8]>::ipv4_mut_from_bytes(self.payload_mut())
         } else {
             None
         }
@@ -185,35 +181,15 @@ where
 }
 
 /// Builder for [`Eth`].
-#[derive(Clone)]
-pub struct EthBuilder<T = Vec<u8>>
-where
-    T: AsRef<[u8]>,
-{
+#[derive(Clone, Debug, Default)]
+pub struct EthBuilder {
     src: Option<EthAddr>,
     dst: Option<EthAddr>,
     eth_type: Option<EthType>,
-    payload: Option<T>,
+    payload: Vec<u8>,
 }
 
-impl<T> Default for EthBuilder<T>
-where
-    T: AsRef<[u8]>,
-{
-    fn default() -> Self {
-        Self {
-            src: None,
-            dst: None,
-            eth_type: None,
-            payload: None,
-        }
-    }
-}
-
-impl<T> EthBuilder<T>
-where
-    T: AsRef<[u8]>,
-{
+impl EthBuilder {
     /// Create a new Eth builder.
     pub fn new() -> Self {
         Self::default()
@@ -238,26 +214,21 @@ where
     }
 
     /// Set the payload.
-    pub fn payload(&mut self, payload: T) -> &mut Self {
-        self.payload = Some(payload);
+    pub fn payload<T: AsRef<[u8]>>(&mut self, payload: T) -> &mut Self {
+        self.payload.extend_from_slice(payload.as_ref());
         self
     }
 
     /// Build the Eth layer.
     pub fn build(&self) -> Eth<Vec<u8>> {
-        let len = MIN_HEADER_LENGTH + self.payload.as_ref().map(|p| p.as_ref().len()).unwrap_or(0);
+        let len = MIN_HEADER_LENGTH + self.payload.len();
 
         let mut eth = unsafe { Eth::new_unchecked(vec![0; len]) };
 
-        eth.src_mut().set(self.src.clone().unwrap_or_default());
-        eth.dst_mut().set(self.dst.clone().unwrap_or_default());
+        eth.src_mut().set(self.src.unwrap_or_default());
+        eth.dst_mut().set(self.dst.unwrap_or_default());
         eth.eth_type_mut().set(self.eth_type.unwrap_or_default());
-        eth.payload_mut().copy_from_slice(
-            self.payload
-                .as_ref()
-                .map(|p| p.as_ref())
-                .unwrap_or_default(),
-        );
+        eth.payload_mut().copy_from_slice(self.payload.as_ref());
 
         eth
     }
@@ -396,12 +367,71 @@ mod tests {
             dst: [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB],
             src: [0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67],
             eth_type: EthType::Ipv4,
-            payload: []
         );
 
         assert_eq!(
             format!("{:?}", eth),
             "Eth { dst: 01:23:45:67:89:AB, src: CD:EF:01:23:45:67, eth_type: Ipv4 }"
+        );
+    }
+
+    #[test]
+    fn eth_vlan_ipv4() {
+        let mut data: [u8; 50] = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // dst mac
+            0x06, 0x05, 0x04, 0x03, 0x02, 0x01, // src mac
+            0x81, 0x00, // eth type vlan
+            0x01, 0x23, // pcp 0, dei 0, vlan id 0x123 (291)
+            0x08, 0x00, // eth type ipv4
+            0x45, // version 4, ihl 5
+            0x00, // dscp 0, ecn 0
+            0x00, 0x20, // total length 20 + 8 + 4 = 32
+            0x00, 0x00, // identification 0
+            0x00, 0x00, // flags 0, fragment offset 0
+            0x40, // ttl 64
+            0x11, // protocol udp
+            0x00, 0x00, // checksum 0 (TODO: check this)
+            0x7f, 0x00, 0x00, 0x01, // src ip
+            0x7f, 0x00, 0x00, 0x02, // dst ip
+            0x04, 0xd2, 0x04, 0xd3, // src port 1234, dst port 1235
+            0x00, 0x0c, // length 12
+            0x00, 0x00, // checksum 0 (TODO: check this)
+            0x01, 0x02, 0x03, 0x04, // payload
+        ];
+
+        let mut eth = Eth::new(&mut data).unwrap();
+
+        let mut ipv4 = eth.ipv4_mut().unwrap();
+        assert_eq!(ipv4.ihl().get(), 5);
+        assert_eq!(ipv4.protocol().get(), IpProtocol::Udp);
+
+        ipv4.protocol_mut().set(IpProtocol::Tcp);
+
+        assert_eq!(ipv4.protocol().get(), IpProtocol::Tcp);
+
+        assert_eq!(
+            data,
+            [
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // dst mac
+                0x06, 0x05, 0x04, 0x03, 0x02, 0x01, // src mac
+                0x81, 0x00, // eth type vlan
+                0x01, 0x23, // pcp 0, dei 0, vlan id 0x123 (291)
+                0x08, 0x00, // eth type ipv4
+                0x45, // version 4, ihl 5
+                0x00, // dscp 0, ecn 0
+                0x00, 0x20, // total length 20 + 8 + 4 = 32
+                0x00, 0x00, // identification 0
+                0x00, 0x00, // flags 0, fragment offset 0
+                0x40, // ttl 64
+                0x06, // protocol tcp
+                0x00, 0x00, // checksum (TODO: check this)
+                0x7f, 0x00, 0x00, 0x01, // src ip
+                0x7f, 0x00, 0x00, 0x02, // dst ip
+                0x04, 0xd2, 0x04, 0xd3, // src port 1234, dst port 1235
+                0x00, 0x0c, // length 12
+                0x00, 0x00, // checksum 0 (TODO: check this)
+                0x01, 0x02, 0x03, 0x04, // payload
+            ]
         );
     }
 }

@@ -1,31 +1,40 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use netkit::capture::file::pcap::PcapReader;
-use netkit::packet::prelude::*;
+// use netkit::capture::format::pcap::PcapReader;
+use netkit::capture::open_capture;
 
 #[derive(Debug, Parser)]
 struct Args {
     pcap_file: PathBuf,
+
+    #[clap(long, default_value_t)]
+    payload: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    println!("Reading pcap file: {:?}", args.pcap_file);
-
     let file = std::fs::File::open(&args.pcap_file)?;
 
-    let mut reader = PcapReader::new(file);
+    let reader = open_capture(file)?;
 
-    println!("Global header: {:#x?}", reader.header);
+    println!("Reading {} file: {:?}", reader.format(), args.pcap_file);
 
-    while let Some((hdr, data)) = reader.next_packet() {
-        println!("Packet: {:?}", hdr);
-        // println!("Data: {:?}", data);
+    for packet in reader {
+        let packet = packet?;
 
-        let packet = Eth::new(data).unwrap();
-        println!("Packet: {:?}", packet);
+        println!(
+            "Pkt (ts: {}, orig len: {}, cap len: {}, linktype: {})",
+            packet.timestamp_ns,
+            packet.orig_len,
+            packet.data.len(),
+            packet.linktype
+        );
+
+        if args.payload {
+            println!("  Payload: {:02X?}", packet.data);
+        }
     }
 
     Ok(())

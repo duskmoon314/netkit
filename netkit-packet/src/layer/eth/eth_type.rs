@@ -53,3 +53,36 @@ impl Default for EthType {
 }
 
 impl_target!(frominto, EthType, u16);
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use crate::{test_enum_num, test_enum_str};
+
+    use super::*;
+
+    #[test]
+    fn eth_type_str() {
+        test_enum_str!(
+            EthType,
+            Ipv4 => "Ipv4",
+            Arp => "Arp",
+            FrameRelayArp => "FrameRelayArp",
+            Vlan => "Vlan",
+            Ipv6 => "Ipv6",
+        );
+    }
+
+    #[test]
+    fn eth_type_num() {
+        test_enum_num!(
+            EthType: u16,
+            Ipv4 => 0x0800,
+            Arp => 0x0806,
+            FrameRelayArp => 0x0808,
+            Vlan => 0x8100,
+            Ipv6 => 0x86DD,
+        );
+    }
+}

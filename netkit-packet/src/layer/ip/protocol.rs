@@ -1,8 +1,11 @@
+//! IP Protocol
+
 use num_enum::{FromPrimitive, IntoPrimitive};
 use strum::{AsRefStr, Display, EnumString};
 
 use crate::impl_target;
 
+/// IP Protocol
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
     Debug,
@@ -19,19 +22,23 @@ use crate::impl_target;
 )]
 #[repr(u8)]
 #[non_exhaustive]
+#[allow(missing_docs)]
 pub enum IpProtocol {
     Hopopt = 0,
 
+    /// Internet Control Message Protocol
     Icmp = 1,
 
     Igmp = 2,
 
     Ggp = 3,
 
+    /// Internet Protocol version 4
     Ipv4 = 4,
 
     St = 5,
 
+    /// Transmission Control Protocol
     Tcp = 6,
 
     Cbt = 7,
@@ -54,6 +61,7 @@ pub enum IpProtocol {
 
     Chaos = 16,
 
+    /// User Datagram Protocol
     Udp = 17,
 
     Mux = 18,
@@ -102,6 +110,7 @@ pub enum IpProtocol {
 
     Il = 40,
 
+    /// Internet Protocol version 6
     Ipv6 = 41,
 
     Sdrp = 42,
@@ -320,15 +329,32 @@ impl_target!(frominto, IpProtocol, u8);
 
 #[cfg(test)]
 mod tests {
+    use crate::{test_enum_num, test_enum_str};
+
     use super::*;
     use std::str::FromStr;
 
     #[test]
-    fn test_ip_protocol() {
-        assert_eq!(IpProtocol::Icmp.to_string(), "Icmp");
-        assert_eq!(IpProtocol::Icmp.as_ref(), "Icmp");
-        assert_eq!(IpProtocol::Icmp.to_string(), "Icmp");
-        assert_eq!(IpProtocol::from(1), IpProtocol::Icmp);
-        assert_eq!(IpProtocol::from_str("Icmp"), Ok(IpProtocol::Icmp));
+    fn ip_protocol_str() {
+        test_enum_str!(
+            IpProtocol,
+            Icmp => "Icmp",
+            Ipv4 => "Ipv4",
+            Tcp => "Tcp",
+            Udp => "Udp",
+            Ipv6 => "Ipv6",
+        );
+    }
+
+    #[test]
+    fn ip_protocol_num() {
+        test_enum_num!(
+            IpProtocol: u8,
+            Icmp => 1,
+            Ipv4 => 4,
+            Tcp => 6,
+            Udp => 17,
+            Ipv6 => 41,
+        );
     }
 }

@@ -1,0 +1,19 @@
+[package]
+name = "pcap-rewrite"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+indicatif = { workspace = true }
+indicatif-log-bridge = { workspace = true }
+ipnet = { workspace = true }
+netkit = { workspace = true }
+rand = { workspace = true }

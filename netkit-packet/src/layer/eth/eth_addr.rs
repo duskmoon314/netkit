@@ -1,4 +1,4 @@
-//！ Ethernet MAC address
+//! Ethernet MAC address
 
 use core::{convert::TryFrom, fmt::Display, str::FromStr};
 
@@ -17,7 +17,7 @@ pub enum EthAddrError {
 }
 
 /// Ethernet MAC address
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct EthAddr {
     octets: [u8; 6],
