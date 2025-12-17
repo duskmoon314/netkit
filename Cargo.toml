@@ -69,6 +69,14 @@ include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE*"]
 inherits = "release"
 debug = true
 
+# Optimized for binary size
+[profile.release-size]
+inherits = "release"
+strip = true         # Strip symbols
+opt-level = "z"      # Optimize for size
+lto = true           # Enable link-time optimization
+codegen-units = 1    # Better optimization (slower compile)
+
 [dependencies]
 netkit-packet = { workspace = true }
 netkit-capture = { workspace = true }

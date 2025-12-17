@@ -1,11 +1,11 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use clap::{Args, Parser, ValueEnum};
 use log::{debug, error, info};
-use netkit::capture::format::pcap::PcapReader;
-use netkit::capture::LinkType;
+use netkit::capture::format::auto::open_capture;
+use netkit::capture::{CaptureReader, LinkType};
 use netkit::packet::prelude::*;
 use polars::prelude::*;
 
@@ -219,83 +219,114 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Process a single packet based on link type
-/// Returns (eth_type, ipv4_packet_data) if successful
-fn process_packet<'a>(
-    linktype: LinkType,
-    data: &'a [u8],
+/// Process a single IPv4 packet - extract fields and add to batch
+#[allow(clippy::too_many_arguments)]
+fn process_ipv4_packet<T: AsRef<[u8]>>(
+    ip: Ipv4<T>,
+    ts: i64,
+    orig_len: u32,
     stats: &mut Statistics,
-) -> Option<(u16, &'a [u8])> {
-    match linktype {
-        LinkType::Ethernet => {
-            // Parse Ethernet frame
-            match Eth::new(data) {
-                Ok(eth) => {
-                    let eth_type = eth.eth_type().get().into();
-                    // Check if it's IPv4 (EtherType 0x0800)
-                    if eth_type == 0x0800u16 {
-                        // IPv4 packet starts after Ethernet header (14 bytes)
-                        if data.len() > 14 {
-                            Some((eth_type, &data[14..]))
-                        } else {
-                            error!("Ethernet frame too short for IPv4");
-                            stats.parse_errors += 1;
-                            None
-                        }
-                    } else {
-                        stats.non_ipv4_packets += 1;
-                        None
-                    }
-                }
-                Err(err) => {
-                    error!("Error parsing Ethernet frame: {:?}", err);
-                    stats.parse_errors += 1;
-                    None
-                }
-            }
+    args: &Flags,
+    batch: &mut PacketBatch,
+    tmp_dir: &tempfile::TempDir,
+    batch_count: &mut usize,
+) -> anyhow::Result<()> {
+    stats.ipv4_packets += 1;
+
+    // Fast path: if not dumping, just count protocols
+    if args.dump.is_none() {
+        if ip.tcp().is_some() {
+            stats.tcp_packets += 1;
+        } else if ip.udp().is_some() {
+            stats.udp_packets += 1;
+        } else {
+            stats.other_ip_packets += 1;
         }
-        LinkType::Ipv4 | LinkType::Raw => {
-            // Parse IPv4 directly without link layer (verify it's valid IPv4)
-            match Ipv4::new(data) {
-                Ok(_ip) => Some((0x0800u16, data)),
-                Err(err) => {
-                    error!("Error parsing IPv4 packet: {:?}", err);
-                    stats.parse_errors += 1;
-                    None
-                }
-            }
-        }
-        _ => {
-            error!("Unsupported link type: {:?}", linktype);
-            stats.parse_errors += 1;
-            None
-        }
+        return Ok(());
     }
+
+    // Slow path: extract all fields for dumping
+    let src_addr: u32 = ip.src().get().into();
+    let dst_addr: u32 = ip.dst().get().into();
+    let protocol: u8 = ip.protocol().get().into();
+    let len = ip.total_length().get();
+
+    let (src_port, dst_port, tcp_flags, tcp_window, tcp_data_offset, udp_length) =
+        if let Some(tcp) = ip.tcp() {
+            stats.tcp_packets += 1;
+            (
+                tcp.src_port().get(),
+                tcp.dst_port().get(),
+                tcp.flags().raw(),
+                tcp.window_size().get(),
+                tcp.data_offset().get(),
+                0,
+            )
+        } else if let Some(udp) = ip.udp() {
+            stats.udp_packets += 1;
+            (
+                udp.src_port().get(),
+                udp.dst_port().get(),
+                0,
+                0,
+                0,
+                udp.length().get(),
+            )
+        } else {
+            stats.other_ip_packets += 1;
+            (0, 0, 0, 0, 0, 0)
+        };
+
+    // EtherType is always 0x0800 for IPv4
+    let eth_type = EthType::Ipv4.into();
+
+    batch.push(
+        ts,
+        orig_len,
+        eth_type,
+        src_addr,
+        dst_addr,
+        protocol,
+        ip.tos().get(),
+        src_port,
+        dst_port,
+        tcp_flags,
+        tcp_window,
+        tcp_data_offset,
+        len,
+        ip.ttl().get(),
+        udp_length,
+    );
+
+    if batch.is_full() {
+        let mut df = batch.as_dataframe()?;
+        let tmp_file = tmp_dir
+            .path()
+            .join(format!("batch_{}.parquet", *batch_count));
+        let writer = std::fs::File::create(&tmp_file)?;
+        ParquetWriter::new(writer).finish(&mut df)?;
+        *batch_count += 1;
+    }
+
+    Ok(())
 }
 
 fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> anyhow::Result<()> {
     let file = std::fs::File::open(file_path.clone())?;
     let file_size = file.metadata()?.len();
-    let reader = PcapReader::open(file)?;
+    let reader = open_capture(file)?;
+    let format = reader.format();
 
-    debug!("Pcap header: {:X?}", reader.header);
-
-    let nanoseconds = reader.nanoseconds;
-    let time_scale = if nanoseconds {
-        1_000_000_000
-    } else {
-        1_000_000
-    };
     debug!(
-        "Timestamp precision: {}",
-        if nanoseconds {
+        "Default linktype: {:?}, Snaplen: {}, Precision: {}",
+        reader.linktype(),
+        reader.snaplen(),
+        if reader.is_nanosecond_precision() {
             "nanoseconds"
         } else {
             "microseconds"
         }
     );
-
-    let linktype: LinkType = reader.header.network.into();
 
     let pg = multi
         .add(indicatif::ProgressBar::no_length().with_finish(indicatif::ProgressFinish::Abandon));
@@ -317,95 +348,76 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
     let mut batch = PacketBatch::new(args.dump_batch);
     let mut batch_count = 0;
 
+    // Process each packet - check per-packet linktype (important for pcapng with multiple interfaces)
     for result in reader.by_ref() {
         let packet = result?;
         stats.total_packets += 1;
         stats.total_bytes += packet.orig_len as u64;
 
-        let ts = packet.ts_sec() as i64 * time_scale + packet.ts_usec() as i64;
+        let ts = packet.timestamp_ns;
         if stats.first_timestamp.is_none() {
             stats.first_timestamp = Some(ts);
         }
         stats.last_timestamp = Some(ts);
 
-        // Process packet based on link type
-        let (eth_type, ip_data) = match process_packet(linktype, &packet.data, &mut stats) {
-            Some(result) => result,
-            None => continue,
-        };
-
-        // Parse the IPv4 packet from the extracted data
-        let ip = match Ipv4::new(ip_data) {
-            Ok(ip) => ip,
-            Err(err) => {
-                error!("Error parsing IPv4 from extracted data: {:?}", err);
-                stats.parse_errors += 1;
-                continue;
-            }
-        };
-
-        {
-            stats.ipv4_packets += 1;
-
-            let src_addr: u32 = ip.src().get().into();
-            let dst_addr: u32 = ip.dst().get().into();
-            let protocol: u8 = ip.protocol().get().into();
-            let len = ip.total_length().get();
-
-            let (src_port, dst_port, tcp_flags, tcp_window, tcp_data_offset, udp_length) =
-                if let Some(tcp) = ip.tcp() {
-                    stats.tcp_packets += 1;
-                    (
-                        tcp.src_port().get(),
-                        tcp.dst_port().get(),
-                        tcp.flags().raw(),
-                        tcp.window_size().get(),
-                        tcp.data_offset().get(),
-                        0,
-                    )
-                } else if let Some(udp) = ip.udp() {
-                    stats.udp_packets += 1;
-                    (
-                        udp.src_port().get(),
-                        udp.dst_port().get(),
-                        0,
-                        0,
-                        0,
-                        udp.length().get(),
-                    )
-                } else {
-                    stats.other_ip_packets += 1;
-                    (0, 0, 0, 0, 0, 0)
+        // Process based on this packet's linktype (not the capture's default linktype)
+        match packet.linktype {
+            LinkType::Ethernet => {
+                // Parse Ethernet and extract IPv4 (handles VLANs)
+                let eth = match Eth::new(&packet.data) {
+                    Ok(eth) => eth,
+                    Err(err) => {
+                        error!("Error parsing Ethernet frame: {:?}", err);
+                        stats.parse_errors += 1;
+                        continue;
+                    }
                 };
 
-            if args.dump.is_some() {
-                batch.push(
+                let ip = match eth.ipv4() {
+                    Some(ipv4) => ipv4,
+                    None => {
+                        stats.non_ipv4_packets += 1;
+                        continue;
+                    }
+                };
+
+                process_ipv4_packet(
+                    ip,
                     ts,
                     packet.orig_len,
-                    eth_type,
-                    src_addr,
-                    dst_addr,
-                    protocol,
-                    ip.tos().get(),
-                    src_port,
-                    dst_port,
-                    tcp_flags,
-                    tcp_window,
-                    tcp_data_offset,
-                    len,
-                    ip.ttl().get(),
-                    udp_length,
-                );
+                    &mut stats,
+                    args,
+                    &mut batch,
+                    &tmp_dir,
+                    &mut batch_count,
+                )?;
+            }
+            LinkType::Ipv4 | LinkType::Raw => {
+                // Parse IPv4 directly
+                let ip = match Ipv4::new(packet.data.as_slice()) {
+                    Ok(ip) => ip,
+                    Err(err) => {
+                        error!("Error parsing IPv4: {:?}", err);
+                        stats.parse_errors += 1;
+                        continue;
+                    }
+                };
 
-                if batch.is_full() {
-                    let mut df = batch.as_dataframe()?;
-                    let tmp_file = tmp_dir
-                        .path()
-                        .join(format!("batch_{}.parquet", batch_count));
-                    let writer = std::fs::File::create(&tmp_file)?;
-                    ParquetWriter::new(writer).finish(&mut df)?;
-                    batch_count += 1;
-                }
+                process_ipv4_packet(
+                    ip,
+                    ts,
+                    packet.orig_len,
+                    &mut stats,
+                    args,
+                    &mut batch,
+                    &tmp_dir,
+                    &mut batch_count,
+                )?;
+            }
+            _ => {
+                error!("Unsupported link type: {:?}", packet.linktype);
+                stats.parse_errors += 1;
+                continue;
             }
         }
     }
@@ -430,6 +442,7 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
 
     // File statistics
     println!("\n📁 File Information:");
+    println!("  Format:                 {:>12}", format);
     println!(
         "  File size:              {:>12} bytes ({:.2} MB)",
         file_size,
@@ -489,32 +502,29 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
     let duration = stats.duration_secs();
     println!("\n⏱️  Timing Information:");
     if let (Some(first), Some(last)) = (stats.first_timestamp, stats.last_timestamp) {
-        // Timestamps are stored in the resolution of time_scale (either ns or µs)
-        // Convert to seconds and nanoseconds for chrono
-        let first_secs = first / time_scale;
-        let first_subsec_ns = ((first % time_scale) * (1_000_000_000 / time_scale)) as u32;
-        let last_secs = last / time_scale;
-        let last_subsec_ns = ((last % time_scale) * (1_000_000_000 / time_scale)) as u32;
+        // Timestamps are already in nanoseconds
+        let first_secs = first / 1_000_000_000;
+        let first_subsec_ns = (first % 1_000_000_000) as u32;
+        let last_secs = last / 1_000_000_000;
+        let last_subsec_ns = (last % 1_000_000_000) as u32;
 
         let first_dt = DateTime::from_timestamp(first_secs, first_subsec_ns)
             .unwrap_or(DateTime::<Utc>::MIN_UTC);
         let last_dt =
             DateTime::from_timestamp(last_secs, last_subsec_ns).unwrap_or(DateTime::<Utc>::MIN_UTC);
 
-        let timestamp_unit = if nanoseconds { "ns" } else { "µs" };
-
         println!("  First packet:");
         println!(
             "    Time:                 {}",
             first_dt.format("%Y-%m-%d %H:%M:%S%.6f UTC")
         );
-        println!("    Timestamp:            {} {}", first, timestamp_unit);
+        println!("    Timestamp:            {} ns", first);
         println!("  Last packet:");
         println!(
             "    Time:                 {}",
             last_dt.format("%Y-%m-%d %H:%M:%S%.6f UTC")
         );
-        println!("    Timestamp:            {} {}", last, timestamp_unit);
+        println!("    Timestamp:            {} ns", last);
         println!("  Capture duration:       {:>12.6} seconds", duration);
     }
     println!(
@@ -556,8 +566,16 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
 
     // Use Polars for advanced statistics if we have data
     if !files.is_empty() {
+        // Convert PathBuf to PlPath for Polars 0.52+
+        let paths: Vec<PlPath> = files
+            .iter()
+            .map(|p| {
+                let arc_path: Arc<Path> = Arc::from(p.as_path());
+                PlPath::Local(arc_path)
+            })
+            .collect();
         let lf = LazyFrame::scan_parquet_files(
-            Arc::from(files.clone().into_boxed_slice()),
+            paths.into(),
             ScanArgsParquet {
                 low_memory: true,
                 ..Default::default()
@@ -737,16 +755,10 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
                 if let (Some(ip), Some(count), Some(bytes)) =
                     (ip_col.get(i), count_col.get(i), bytes_col.get(i))
                 {
-                    let ip_str = format!(
-                        "{}.{}.{}.{}",
-                        (ip >> 24) & 0xFF,
-                        (ip >> 16) & 0xFF,
-                        (ip >> 8) & 0xFF,
-                        ip & 0xFF
-                    );
+                    let ip_addr = std::net::Ipv4Addr::from(ip);
                     println!(
                         "  {:>15}:          {:>12} pkts, {:>10.2} MB",
-                        ip_str,
+                        ip_addr,
                         count,
                         bytes as f64 / 1_048_576.0
                     );
@@ -764,16 +776,10 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
                 if let (Some(ip), Some(count), Some(bytes)) =
                     (ip_col.get(i), count_col.get(i), bytes_col.get(i))
                 {
-                    let ip_str = format!(
-                        "{}.{}.{}.{}",
-                        (ip >> 24) & 0xFF,
-                        (ip >> 16) & 0xFF,
-                        (ip >> 8) & 0xFF,
-                        ip & 0xFF
-                    );
+                    let ip_addr = std::net::Ipv4Addr::from(ip);
                     println!(
                         "  {:>15}:          {:>12} pkts, {:>10.2} MB",
-                        ip_str,
+                        ip_addr,
                         count,
                         bytes as f64 / 1_048_576.0
                     );
@@ -795,7 +801,7 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
                     info!("Dumping to CSV file: {:?}", dump_path);
 
                     let lf_dump = lf.sink_csv(
-                        SinkTarget::Path(Arc::new(dump_path.clone())),
+                        SinkTarget::Path(PlPath::Local(Arc::from(dump_path.as_path()))),
                         CsvWriterOptions::default(),
                         None,
                         SinkOptions::default(),
@@ -817,7 +823,7 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
                     info!("Dumping to Parquet file: {:?}", dump_path);
 
                     let lf_dump = lf.sink_parquet(
-                        SinkTarget::Path(Arc::new(dump_path.clone())),
+                        SinkTarget::Path(PlPath::Local(Arc::from(dump_path.as_path()))),
                         ParquetWriteOptions {
                             row_group_size: Some(65536),
                             ..Default::default()

@@ -12,13 +12,12 @@ indicatif.workspace = true
 indicatif-log-bridge.workspace = true
 log.workspace = true
 netkit = { path = "../../" }
-polars = { version = "0.49.1", features = [
+# Polars with minimal features for statistics and export
+polars = { version = "0.52.0", default-features = false, features = [
     "dtype-u8",
     "dtype-u16",
-    # "json",
     "parquet",
-    # "rows",
-    # "streaming",
+    "csv",
     "lazy",
 ] }
 tempfile = "3.23.0"
