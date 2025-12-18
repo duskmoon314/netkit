@@ -60,7 +60,7 @@ impl CaptureFormat {
 
 impl std::fmt::Display for CaptureFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
+        f.pad(self.name())
     }
 }
 
