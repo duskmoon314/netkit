@@ -189,6 +189,10 @@ struct Flags {
     /// The batch size for dumping the inner table
     #[arg(long, default_value_t = 1000000)]
     dump_batch: usize,
+
+    /// The output directory for dumped files, is not given, use the same directory as input file
+    #[arg(short, long)]
+    output: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -350,7 +354,15 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
 
     // Process each packet - check per-packet linktype (important for pcapng with multiple interfaces)
     for result in reader.by_ref() {
-        let packet = result?;
+        let packet = match result {
+            Ok(pkt) => pkt,
+            Err(err) => {
+                error!("Error reading packet: {:?}", err);
+                stats.parse_errors += 1;
+                continue;
+            }
+        };
+
         stats.total_packets += 1;
         stats.total_bytes += packet.orig_len as u64;
 
@@ -395,6 +407,28 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
             LinkType::Ipv4 | LinkType::Raw => {
                 // Parse IPv4 directly
                 let ip = match Ipv4::new(packet.data.as_slice()) {
+                    Ok(ip) => ip,
+                    Err(err) => {
+                        error!("Error parsing IPv4: {:?}", err);
+                        stats.parse_errors += 1;
+                        continue;
+                    }
+                };
+
+                process_ipv4_packet(
+                    ip,
+                    ts,
+                    packet.orig_len,
+                    &mut stats,
+                    args,
+                    &mut batch,
+                    &tmp_dir,
+                    &mut batch_count,
+                )?;
+            }
+
+            LinkType::LinuxSll => {
+                let ip = match Ipv4::new(&packet.data.as_slice()[16..]) {
                     Ok(ip) => ip,
                     Err(err) => {
                         error!("Error parsing IPv4: {:?}", err);
@@ -797,7 +831,14 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
 
             match args.dump.unwrap() {
                 DumpFormat::Csv => {
-                    let dump_path = file_path.with_extension("csv");
+                    // let dump_path = file_path.with_extension("csv");
+                    let dump_path = if let Some(ref out_dir) = args.output {
+                        out_dir
+                            .join(file_path.file_name().expect("Invalid input file name"))
+                            .with_extension("csv")
+                    } else {
+                        file_path.with_extension("csv")
+                    };
                     info!("Dumping to CSV file: {:?}", dump_path);
 
                     let lf_dump = lf.sink_csv(
@@ -819,7 +860,14 @@ fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> a
                     );
                 }
                 DumpFormat::Parquet => {
-                    let dump_path = file_path.with_extension("parquet");
+                    // let dump_path = file_path.with_extension("parquet");
+                    let dump_path = if let Some(ref out_dir) = args.output {
+                        out_dir
+                            .join(file_path.file_name().expect("Invalid input file name"))
+                            .with_extension("parquet")
+                    } else {
+                        file_path.with_extension("parquet")
+                    };
                     info!("Dumping to Parquet file: {:?}", dump_path);
 
                     let lf_dump = lf.sink_parquet(
