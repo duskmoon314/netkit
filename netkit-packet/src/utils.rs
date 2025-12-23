@@ -58,6 +58,14 @@ macro_rules! layer_impl {
                 &mut self.data
             }
         }
+
+        impl $name<&[u8]> {
+            /// Convert to owned layer.
+            pub fn to_owned(&self) -> $name<Vec<u8>> {
+                let data = self.data.as_ref().to_vec();
+                unsafe { $name::new_unchecked(data) }
+            }
+        }
     };
 }
 pub(crate) use layer_impl;
