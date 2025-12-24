@@ -12,6 +12,27 @@ pub enum Ipv4Error {
     #[error("Invalid Ipv4 length: Length {0} is less than minimum 20")]
     InvalidLength(usize),
 
+    /// Invalid version.
+    #[error("Invalid version: Expected 4, got {0}")]
+    InvalidVersion(u8),
+
+    /// Invalid IHL (Internet Header Length).
+    #[error("Invalid IHL: {0}")]
+    InvalidIhl(String),
+
+    /// Invalid total length.
+    #[error("Invalid total length: {0}")]
+    InvalidTotalLength(String),
+
+    /// Invalid header checksum.
+    #[error("Invalid header checksum: Expected {expected:#06x}, got {actual:#06x}")]
+    InvalidChecksum {
+        /// Expected checksum value.
+        expected: u16,
+        /// Actual checksum value found in the packet.
+        actual: u16,
+    },
+
     /// Invalid Arguments.
     #[error("Invalid Arguments: {0}")]
     InvalidArguments(String),
@@ -94,11 +115,100 @@ where
     /// Validate the Ipv4 layer.
     pub fn validate(&self) -> Result<(), Ipv4Error> {
         let data = self.data.as_ref();
+
+        // Check minimum length
         if data.len() < Self::MIN_HEADER_LENGTH {
             return Err(Ipv4Error::InvalidLength(data.len()));
         }
 
-        // TODO: validate ihl, checksum, etc.
+        // Check version field
+        let version = self.version().get();
+        if version != 4 {
+            return Err(Ipv4Error::InvalidVersion(version));
+        }
+
+        // Check IHL (Internet Header Length)
+        let ihl = self.ihl().get();
+        if ihl < 5 {
+            return Err(Ipv4Error::InvalidIhl(format!(
+                "IHL must be at least 5 (20 bytes), got {}",
+                ihl
+            )));
+        }
+
+        let header_len = ihl as usize * 4;
+        if data.len() < header_len {
+            return Err(Ipv4Error::InvalidIhl(format!(
+                "Data length {} is less than IHL * 4 = {}",
+                data.len(),
+                header_len
+            )));
+        }
+
+        // Check total length field
+        let total_length = self.total_length().get() as usize;
+        if total_length < header_len {
+            return Err(Ipv4Error::InvalidTotalLength(format!(
+                "Total length {} is less than header length {}",
+                total_length, header_len
+            )));
+        }
+
+        if total_length > data.len() {
+            return Err(Ipv4Error::InvalidTotalLength(format!(
+                "Total length {} exceeds data length {}",
+                total_length,
+                data.len()
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Calculate the header checksum.
+    ///
+    /// This calculates what the checksum field should be based on the current
+    /// header contents (with the checksum field treated as zero).
+    pub fn calculate_checksum(&self) -> u16 {
+        let data = self.data.as_ref();
+        let header_len = self.ihl().get() as usize * 4;
+
+        let mut sum: u32 = 0;
+
+        // Sum all 16-bit words in the header, treating checksum field as 0
+        for i in (0..header_len).step_by(2) {
+            if i == Self::FIELD_CHECKSUM.start {
+                // Skip the checksum field (treat as 0)
+                continue;
+            }
+
+            let word = if i + 1 < header_len {
+                u16::from_be_bytes([data[i], data[i + 1]])
+            } else {
+                // Odd length - pad with zero
+                u16::from_be_bytes([data[i], 0])
+            };
+
+            sum += word as u32;
+        }
+
+        // Fold 32-bit sum to 16 bits
+        while sum >> 16 != 0 {
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+
+        // One's complement
+        !sum as u16
+    }
+
+    /// Validate the header checksum.
+    pub fn validate_checksum(&self) -> Result<(), Ipv4Error> {
+        let expected = self.calculate_checksum();
+        let actual = self.checksum().get();
+
+        if expected != actual {
+            return Err(Ipv4Error::InvalidChecksum { expected, actual });
+        }
 
         Ok(())
     }
@@ -671,5 +781,119 @@ mod tests {
         assert_eq!(ipv4.dst().get(), Ipv4Addr::new(10, 0, 1, 3));
         assert_eq!(ipv4.protocol().get(), IpProtocol::Udp);
         assert_eq!(ipv4.payload(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_validate_invalid_length() {
+        let data = [0u8; 10]; // Too short
+        let result = Ipv4::new(&data[..]);
+        assert!(matches!(result, Err(Ipv4Error::InvalidLength(10))));
+    }
+
+    #[test]
+    fn test_validate_invalid_version() {
+        let mut data = [0u8; 20];
+        data[0] = 0x60; // version 6, ihl 0
+        let ipv4 = unsafe { Ipv4::new_unchecked(&data[..]) };
+        let result = ipv4.validate();
+        assert!(matches!(result, Err(Ipv4Error::InvalidVersion(6))));
+    }
+
+    #[test]
+    fn test_validate_invalid_ihl_too_small() {
+        let mut data = [0u8; 20];
+        data[0] = 0x44; // version 4, ihl 4 (invalid, must be >= 5)
+        let ipv4 = unsafe { Ipv4::new_unchecked(&data[..]) };
+        let result = ipv4.validate();
+        assert!(matches!(result, Err(Ipv4Error::InvalidIhl(_))));
+    }
+
+    #[test]
+    fn test_validate_invalid_ihl_data_too_short() {
+        let mut data = [0u8; 20];
+        data[0] = 0x46; // version 4, ihl 6 (requires 24 bytes)
+        let ipv4 = unsafe { Ipv4::new_unchecked(&data[..]) };
+        let result = ipv4.validate();
+        assert!(matches!(result, Err(Ipv4Error::InvalidIhl(_))));
+    }
+
+    #[test]
+    fn test_validate_invalid_total_length_less_than_header() {
+        let mut data = [0u8; 20];
+        data[0] = 0x45; // version 4, ihl 5
+        data[2] = 0x00; // total_length = 10 (less than 20)
+        data[3] = 0x0A;
+        let ipv4 = unsafe { Ipv4::new_unchecked(&data[..]) };
+        let result = ipv4.validate();
+        assert!(matches!(result, Err(Ipv4Error::InvalidTotalLength(_))));
+    }
+
+    #[test]
+    fn test_validate_invalid_total_length_exceeds_data() {
+        let mut data = [0u8; 20];
+        data[0] = 0x45; // version 4, ihl 5
+        data[2] = 0x00; // total_length = 100 (exceeds 20)
+        data[3] = 0x64;
+        let ipv4 = unsafe { Ipv4::new_unchecked(&data[..]) };
+        let result = ipv4.validate();
+        assert!(matches!(result, Err(Ipv4Error::InvalidTotalLength(_))));
+    }
+
+    #[test]
+    fn test_validate_success() {
+        let mut data = [0u8; 20];
+        data[0] = 0x45; // version 4, ihl 5
+        data[2] = 0x00; // total_length = 20
+        data[3] = 0x14;
+        let result = Ipv4::new(&data[..]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_calculate_checksum() {
+        // Test with a known packet
+        let data: [u8; 20] = [
+            0x45, 0x00, // version 4, ihl 5, dscp 0, ecn 0
+            0x00, 0x14, // total length 20
+            0x1c, 0x46, // identification
+            0x40, 0x00, // flags and fragment offset
+            0x40, 0x06, // ttl 64, protocol tcp
+            0x00, 0x00, // checksum (will be calculated)
+            0xac, 0x10, 0x0a, 0x63, // src ip 172.16.10.99
+            0xac, 0x10, 0x0a, 0x0c, // dst ip 172.16.10.12
+        ];
+
+        let ipv4 = unsafe { Ipv4::new_unchecked(data) };
+        let checksum = ipv4.calculate_checksum();
+        // Expected checksum for this header: 0xb20e
+        assert_eq!(checksum, 0xb20e);
+    }
+
+    #[test]
+    fn test_validate_checksum() {
+        // Valid packet with correct checksum
+        let data: [u8; 20] = [
+            0x45, 0x00, 0x00, 0x14, 0x1c, 0x46, 0x40, 0x00, 0x40, 0x06, 0xb2, 0x0e, 0xac, 0x10,
+            0x0a, 0x63, 0xac, 0x10, 0x0a, 0x0c,
+        ];
+
+        let ipv4 = Ipv4::new(data).unwrap();
+        assert!(ipv4.validate_checksum().is_ok());
+    }
+
+    #[test]
+    fn test_validate_checksum_invalid() {
+        // Packet with incorrect checksum
+        let data: [u8; 20] = [
+            0x45, 0x00, 0x00, 0x14, 0x1c, 0x46, 0x40, 0x00, 0x40, 0x06, 0xFF,
+            0xFF, // wrong checksum
+            0xac, 0x10, 0x0a, 0x63, 0xac, 0x10, 0x0a, 0x0c,
+        ];
+
+        let ipv4 = Ipv4::new(data).unwrap();
+        assert!(matches!(
+            ipv4.validate_checksum(),
+            Err(Ipv4Error::InvalidChecksum { .. })
+        ));
     }
 }
