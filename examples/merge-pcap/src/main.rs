@@ -1,3 +1,4 @@
+use std::io::BufReader;
 use std::{collections::BinaryHeap, fs::File, net::Ipv4Addr, path::PathBuf, time::Duration};
 
 use anyhow::anyhow;
@@ -7,10 +8,10 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use indicatif_log_bridge::LogWrapper;
 use log::error;
 use log::{debug, info};
-use netkit::capture::CaptureWriter;
-use netkit::capture::LinkType;
-use netkit::capture::format::pcap::{PcapReader, PcapWriter};
+use netkit::capture::format::pcap::PcapWriter;
 use netkit::capture::packet::Packet;
+use netkit::capture::{CaptureFile, LinkType};
+use netkit::capture::{CaptureWriter, open_file};
 use netkit::packet::prelude::*;
 use rand::seq::IndexedRandom;
 use rand::{SeedableRng, rngs::StdRng};
@@ -116,6 +117,7 @@ impl From<String> for IpMap {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 struct InputFile {
     /// The path to the input file
     path: PathBuf,
@@ -135,12 +137,23 @@ struct InputFile {
     parallel: u32,
 
     /// Rewrite source IP address
-    #[serde(default)]
     srcipmap: Vec<IpMap>,
 
     /// Rewrite destination IP address
-    #[serde(default)]
     dstipmap: Vec<IpMap>,
+}
+
+impl Default for InputFile {
+    fn default() -> Self {
+        InputFile {
+            path: PathBuf::new(),
+            start_time: vec![0],
+            repeat: 1,
+            parallel: 1,
+            srcipmap: vec![],
+            dstipmap: vec![],
+        }
+    }
 }
 
 impl InputFile {
@@ -159,7 +172,8 @@ impl InputFile {
     }
 
     fn into_iter(self, cli: &Cli, pg: ProgressBar) -> InputFileIterator {
-        let reader = PcapReader::open(File::open(&self.path).unwrap()).unwrap();
+        let reader = open_file(&self.path)
+            .unwrap_or_else(|e| panic!("Unable to open pcap file {}: {}", self.path.display(), e));
 
         let src_ip_pool = self
             .srcipmap
@@ -198,8 +212,7 @@ impl InputFile {
             current: 0,
             original_first_packet_time: None,
             first_packet_time: None,
-            last_packet_time: (0, 0),
-            nanoseconds: cli.nanoseconds.unwrap_or(false),
+            last_packet_time: 0,
             erase_timestamp: cli.erase_timestamp.unwrap_or(false),
             pg,
             rng: StdRng::from_os_rng(),
@@ -209,15 +222,13 @@ impl InputFile {
     }
 }
 
-#[derive(Debug)]
 struct InputFileIterator {
     file: InputFile,
-    reader: PcapReader<File>,
+    reader: CaptureFile<BufReader<File>>,
     current: u32,
-    original_first_packet_time: Option<u64>,
-    first_packet_time: Option<(u32, u32)>,
-    last_packet_time: (u32, u32),
-    nanoseconds: bool,
+    original_first_packet_time: Option<i64>,
+    first_packet_time: Option<i64>,
+    last_packet_time: i64,
     erase_timestamp: bool,
     pg: ProgressBar,
     rng: StdRng,
@@ -250,76 +261,59 @@ impl Iterator for InputFileIterator {
                         return None;
                     }
 
-                    self.reader = PcapReader::open(File::open(&self.file.path).unwrap()).unwrap();
+                    self.reader = open_file(&self.file.path).unwrap_or_else(|e| {
+                        panic!(
+                            "Unable to open pcap file {}: {}",
+                            self.file.path.display(),
+                            e
+                        )
+                    });
                     self.first_packet_time = None;
                 }
             }
         };
 
-        let time_scale: u64 = if self.reader.nanoseconds {
-            1_000_000_000
-        } else {
-            1_000_000
-        };
-
-        let ts_sec = packet.ts_sec();
-        let ts_usec = packet.ts_usec();
+        let timestamp = packet.timestamp_ns;
 
         if self.first_packet_time.is_none() {
             // A new start of pcap, may be repeat or a new group
-            self.original_first_packet_time = Some(ts_sec as u64 * time_scale + ts_usec as u64);
 
-            let new_ts_sec;
-            let new_ts_usec;
+            self.original_first_packet_time = Some(timestamp);
+
+            let new_ts;
             if self.current.is_multiple_of(self.file.repeat) {
                 // A new group
+
                 if self.erase_timestamp {
-                    new_ts_sec =
-                        self.file.start_time[(self.current / self.file.repeat) as usize] as u32;
-                    new_ts_usec = 0;
+                    new_ts = (self.file.start_time[(self.current / self.file.repeat) as usize]
+                        as i64)
+                        * 1_000_000_000;
                 } else {
-                    new_ts_sec = (ts_sec as i32
-                        + self.file.start_time[(self.current / self.file.repeat) as usize])
-                        as u32;
-                    new_ts_usec = ts_usec;
+                    new_ts = timestamp
+                        + (self.file.start_time[(self.current / self.file.repeat) as usize] as i64)
+                            * 1_000_000_000;
                 }
             } else {
                 // same group, repeating
-                new_ts_sec = self.last_packet_time.0 + 1;
-                new_ts_usec = 0;
+                new_ts = self.last_packet_time + 1_000_000_000;
             }
 
-            self.first_packet_time = Some((new_ts_sec, new_ts_usec));
-            packet.timestamp_ns = (new_ts_sec as i64) * 1_000_000_000 + (new_ts_usec as i64) * 1000;
+            self.first_packet_time = Some(new_ts);
+            packet.timestamp_ns = new_ts;
         } else {
             // Same group same repeat subgroup
             // Calculate the time offset
-            let current_packet_time = ts_sec as u64 * time_scale + ts_usec as u64;
-            let first_packet_time = self
-                .first_packet_time
-                .map(|(sec, usec)| sec as u64 * time_scale + usec as u64)
-                .expect("No first packet time");
 
-            let current_packet_time = current_packet_time
+            let current_packet_time = timestamp
                 - self
                     .original_first_packet_time
                     .expect("No first packet time")
-                + first_packet_time;
+                + self.first_packet_time.expect("No first packet time");
 
-            let new_ts_sec = (current_packet_time / time_scale) as u32;
-            let new_ts_usec = (current_packet_time % time_scale) as u32;
-            packet.timestamp_ns = (new_ts_sec as i64) * 1_000_000_000 + (new_ts_usec as i64) * 1000;
+            packet.timestamp_ns = current_packet_time;
         }
 
-        self.last_packet_time = (packet.ts_sec(), packet.ts_usec());
-
-        // // Adjust timestamp precision if needed
-        // if !self.nanoseconds && self.reader.nanoseconds {
-        //     // Convert from ns to us
-        //     packet.timestamp_ns = (packet.timestamp_ns / 1000) * 1000;
-        // } else if self.nanoseconds && !self.reader.nanoseconds {
-        //     // Already in ns, no change needed
-        // }
+        self.last_packet_time = packet.timestamp_ns;
 
         self.pg.inc(1);
 
