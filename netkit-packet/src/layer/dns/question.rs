@@ -61,7 +61,7 @@ where
     /// Get the length of the DnsQuestion
     #[inline]
     pub const fn len(&self) -> usize {
-        self.name_len + 4
+        self.name_len + 1 + 4 // name_len is index of null byte, +1 for null byte itself, +4 for type+class
     }
 
     /// Unimplemented: Make clippy happy :)

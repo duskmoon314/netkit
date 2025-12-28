@@ -19,4 +19,11 @@ pub mod prelude {
     pub use super::udp::{Udp, UdpError};
 
     pub use super::tcp::{Tcp, TcpError};
+
+    pub use super::dns::{
+        Dns, DnsClass, DnsError, DnsLabel, DnsName, DnsNameError, DnsOpCode, DnsQuestion, DnsRCode,
+        DnsResourceRecord, DnsRrType,
+    };
+
+    pub use super::sll::{ArphrdType, PacketType, Sll, SllError};
 }

@@ -1,0 +1,11 @@
+[package]
+name = "dns-read"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+netkit = { path = "../..", features = [] }
+anyhow = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+clap = { workspace = true }
