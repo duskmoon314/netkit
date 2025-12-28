@@ -3,6 +3,7 @@
 pub mod dns;
 pub mod eth;
 pub mod ip;
+pub mod sll;
 pub mod tcp;
 pub mod udp;
 pub mod vlan;

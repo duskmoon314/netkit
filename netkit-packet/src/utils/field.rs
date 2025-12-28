@@ -67,6 +67,15 @@ impl Target<u8> for bool {
     }
 }
 
+impl Target<u64> for [u8; 8] {
+    fn from_underlay(x: u64) -> Self {
+        x.to_be_bytes()
+    }
+    fn into_underlay(self) -> u64 {
+        u64::from_be_bytes(self)
+    }
+}
+
 /// Underlay trait
 ///
 /// This trait marks the types that can be used as underlay for fields and
@@ -248,6 +257,16 @@ pub trait FieldSpec {
 /// Field specification macro
 ///
 /// This helper macro is used to define a field specification.
+///
+/// ```ignore
+/// field_spec!(MyFieldSpec, u8, u16, 0xFF00, 8);
+///           ^^^^^^^^^^^  ^^  ^^^  ^^^^^^  ^
+///           |            |   |    |       +-- Shift value (optional, default: 0)
+///           |            |   |    +-- Mask value (optional, default: u64::MAX)
+///           |            |   +-- Underlay type
+///           |            +-- Target type
+///           +-- Name of the FieldSpec struct
+/// ```
 #[macro_export]
 macro_rules! field_spec {
     // FieldSpec with only target and underlay
