@@ -2,7 +2,7 @@
 //!
 //! This module contains a helper struct for different flow id types.
 
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use crate::prelude::IpProtocol;
 
@@ -305,5 +305,17 @@ impl From<Ipv4Addr> for FlowId {
 impl From<&Ipv4Addr> for FlowId {
     fn from(addr: &Ipv4Addr) -> Self {
         FlowId::Ip(IpAddr::V4(*addr))
+    }
+}
+
+impl From<Ipv6Addr> for FlowId {
+    fn from(addr: Ipv6Addr) -> Self {
+        FlowId::Ip(IpAddr::V6(addr))
+    }
+}
+
+impl From<&Ipv6Addr> for FlowId {
+    fn from(addr: &Ipv6Addr) -> Self {
+        FlowId::Ip(IpAddr::V6(*addr))
     }
 }

@@ -51,12 +51,17 @@ impl_target!(frominto, u8, u8);
 impl_target!(frominto, u16, u16);
 impl_target!(frominto, u32, u32);
 impl_target!(frominto, u64, u64);
+impl_target!(frominto, u128, u128);
 impl_target!(as, u8, u16);
 impl_target!(as, u8, u32);
 impl_target!(as, u8, u64);
+impl_target!(as, u8, u128);
 impl_target!(as, u16, u32);
 impl_target!(as, u16, u64);
+impl_target!(as, u16, u128);
 impl_target!(as, u32, u64);
+impl_target!(as, u32, u128);
+impl_target!(as, u64, u128);
 
 impl Target<u8> for bool {
     fn from_underlay(x: u8) -> Self {
@@ -73,6 +78,15 @@ impl Target<u64> for [u8; 8] {
     }
     fn into_underlay(self) -> u64 {
         u64::from_be_bytes(self)
+    }
+}
+
+impl Target<u128> for [u8; 16] {
+    fn from_underlay(x: u128) -> Self {
+        x.to_be_bytes()
+    }
+    fn into_underlay(self) -> u128 {
+        u128::from_be_bytes(self)
     }
 }
 
@@ -226,7 +240,7 @@ macro_rules! impl_underlay {
     };
 }
 
-impl_underlay!(u8, u16, u32, u64);
+impl_underlay!(u8, u16, u32, u64, u128);
 impl_underlay!(3, 5, 6, 7);
 
 /// Field specification

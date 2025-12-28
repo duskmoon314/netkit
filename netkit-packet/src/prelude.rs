@@ -4,4 +4,4 @@ pub use crate::utils::*;
 
 pub use crate::layer::prelude::*;
 
-pub use crate::{eth, eth_addr, ipv4, tcp, udp};
+pub use crate::{eth, eth_addr, ipv4, ipv6, sll, tcp, udp};

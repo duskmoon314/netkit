@@ -14,7 +14,7 @@ pub mod prelude {
 
     pub use super::vlan::{Vlan, VlanError};
 
-    pub use super::ip::{IpProtocol, Ipv4, Ipv4Error};
+    pub use super::ip::{IpProtocol, Ipv4, Ipv4Error, Ipv6, Ipv6Error};
 
     pub use super::udp::{Udp, UdpError};
 

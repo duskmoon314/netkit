@@ -113,6 +113,17 @@ where
             None
         }
     }
+
+    /// Get the IPv6 layer if the Eth type is IPv6.
+    pub fn ipv6(&self) -> Option<Ipv6<&[u8]>> {
+        if self.eth_type().get() == EthType::Ipv6 {
+            Ipv6::new(self.payload()).ok()
+        } else if self.eth_type().get() == EthType::Vlan {
+            Vlan::<&[u8]>::ipv6_from_bytes(self.payload())
+        } else {
+            None
+        }
+    }
 }
 
 impl<T> Eth<T>
@@ -155,6 +166,17 @@ where
             Ipv4::new(self.payload_mut()).ok()
         } else if self.eth_type().get() == EthType::Vlan {
             Vlan::<&mut [u8]>::ipv4_mut_from_bytes(self.payload_mut())
+        } else {
+            None
+        }
+    }
+
+    /// Get the mutable IPv6 layer if the Eth type is IPv6.
+    pub fn ipv6_mut(&mut self) -> Option<Ipv6<&mut [u8]>> {
+        if self.eth_type().get() == EthType::Ipv6 {
+            Ipv6::new(self.payload_mut()).ok()
+        } else if self.eth_type().get() == EthType::Vlan {
+            Vlan::<&mut [u8]>::ipv6_mut_from_bytes(self.payload_mut())
         } else {
             None
         }
@@ -373,6 +395,42 @@ mod tests {
             format!("{:?}", eth),
             "Eth { dst: 01:23:45:67:89:AB, src: CD:EF:01:23:45:67, eth_type: Ipv4 }"
         );
+    }
+
+    #[test]
+    fn eth_ipv6() {
+        let data: [u8; 62] = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // dst mac
+            0x06, 0x05, 0x04, 0x03, 0x02, 0x01, // src mac
+            0x86, 0xdd, // eth type ipv6
+            0x60, 0x00, 0x00, 0x00, // version 6, tc 0, flow 0
+            0x00, 0x08, // payload length 8 (UDP header)
+            0x11, // next header: UDP
+            0x40, // hop limit: 64
+            // src: 2001:db8::1
+            0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+            // dst: 2001:db8::2
+            0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+            // UDP header
+            0x04, 0xd2, 0x04, 0xd3, // src port 1234, dst port 1235
+            0x00, 0x08, // length 8
+            0x00, 0x00, // checksum 0
+        ];
+
+        let eth = Eth::new(data).unwrap();
+        assert_eq!(eth.eth_type().get(), EthType::Ipv6);
+
+        let ipv6 = eth.ipv6().unwrap();
+        assert_eq!(ipv6.version().get(), 6);
+        assert_eq!(ipv6.next_header().get(), IpProtocol::Udp);
+        assert_eq!(ipv6.src().get(), core::net::Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
+        assert_eq!(ipv6.dst().get(), core::net::Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 2));
+
+        let udp = ipv6.udp().unwrap();
+        assert_eq!(udp.src_port().get(), 1234);
+        assert_eq!(udp.dst_port().get(), 1235);
     }
 
     #[test]

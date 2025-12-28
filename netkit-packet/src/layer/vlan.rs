@@ -147,6 +147,25 @@ where
             None
         }
     }
+
+    /// Get the IPv6 layer if the Eth type is IPv6.
+    pub fn ipv6(&self) -> Option<Ipv6<&[u8]>> {
+        if self.eth_type().get() == EthType::Ipv6 {
+            Ipv6::new(self.payload()).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Get the IPv6 layer from the given bytes if the Eth type is IPv6.
+    pub fn ipv6_from_bytes(bytes: &[u8]) -> Option<Ipv6<&[u8]>> {
+        let vlan = Vlan::new(bytes).ok()?;
+        if vlan.eth_type().get() == EthType::Ipv6 {
+            Ipv6::new(&bytes[Vlan::<&[u8]>::FIELD_PAYLOAD]).ok()
+        } else {
+            None
+        }
+    }
 }
 
 impl<T> Vlan<T>
@@ -209,6 +228,25 @@ where
         let vlan = Vlan::new(&mut *bytes).ok()?;
         if vlan.eth_type().get() == EthType::Ipv4 {
             Ipv4::new(&mut bytes[Vlan::<&mut [u8]>::FIELD_PAYLOAD]).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Get the mutable IPv6 layer if the Eth type is IPv6.
+    pub fn ipv6_mut(&mut self) -> Option<Ipv6<&mut [u8]>> {
+        if self.eth_type().get() == EthType::Ipv6 {
+            Ipv6::new(self.payload_mut()).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Get the mutable IPv6 layer from the given bytes if the Eth type is IPv6.
+    pub fn ipv6_mut_from_bytes(bytes: &mut [u8]) -> Option<Ipv6<&mut [u8]>> {
+        let vlan = Vlan::new(&mut *bytes).ok()?;
+        if vlan.eth_type().get() == EthType::Ipv6 {
+            Ipv6::new(&mut bytes[Vlan::<&mut [u8]>::FIELD_PAYLOAD]).ok()
         } else {
             None
         }
