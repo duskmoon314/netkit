@@ -424,15 +424,6 @@ fn main() -> anyhow::Result<()> {
     let mut output_file = std::fs::File::create(&output_file)
         .map_err(|e| anyhow!("Failed to create output file: {}", e))?;
 
-    let mut pcap_writer = PcapWriter::new(
-        &mut output_file,
-        false,
-        args.nanoseconds.unwrap_or(false),
-        args.snaplen.unwrap_or(65535),
-        LinkType::Ethernet,
-    )
-    .map_err(|e| anyhow!("Failed to create pcap writer: {}", e))?;
-
     let mut packet_heap: BinaryHeap<PacketHeapItem> =
         BinaryHeap::with_capacity(args.input_files.len());
 
@@ -452,9 +443,6 @@ fn main() -> anyhow::Result<()> {
 
     for (i, input_file) in input_files.iter_mut().enumerate() {
         if let Some(item) = input_file.next() {
-            // packet_heap.push(PacketHeapItem {
-            //     index: i,
-            //     header: item.0,
             packet_heap.extend(
                 item.into_iter()
                     .map(|packet| PacketHeapItem { index: i, packet }),
@@ -463,6 +451,20 @@ fn main() -> anyhow::Result<()> {
     }
 
     debug!("Packet heap initialized: {packet_heap:?}");
+
+    let linktype = packet_heap
+        .peek()
+        .map(|item| item.packet.linktype)
+        .unwrap_or(LinkType::Ethernet);
+
+    let mut pcap_writer = PcapWriter::new(
+        &mut output_file,
+        false,
+        args.nanoseconds.unwrap_or(false),
+        args.snaplen.unwrap_or(65535),
+        linktype,
+    )
+    .map_err(|e| anyhow!("Failed to create pcap writer: {}", e))?;
 
     while let Some(item) = packet_heap.pop() {
         // debug!("Processing packet: {item:?}");
@@ -473,9 +475,9 @@ fn main() -> anyhow::Result<()> {
             .write_packet(&item.packet)
             .map_err(|e| anyhow!("Failed to write packet: {}", e))?;
 
-        if packet_heap.len() < args.input_files.len() {
-            write_pg.inc(1);
+        write_pg.inc(1);
 
+        if packet_heap.len() < args.input_files.len() {
             if let Some(next_item) = input_file.next() {
                 packet_heap.extend(next_item.into_iter().map(|packet| PacketHeapItem {
                     index: item.index,
