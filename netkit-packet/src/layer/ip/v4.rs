@@ -314,7 +314,8 @@ where
     /// Get the options.
     #[inline]
     pub fn options(&self) -> &[u8] {
-        &self.data.as_ref()[Self::MIN_HEADER_LENGTH..(self.ihl().get() - 5) as usize * 4]
+        let header_len = self.ihl().get() as usize * 4;
+        &self.data.as_ref()[Self::MIN_HEADER_LENGTH..header_len]
     }
 
     /// Get the payload.
@@ -525,8 +526,8 @@ where
     /// Get the mutable options.
     #[inline]
     pub fn options_mut(&mut self) -> &mut [u8] {
-        let range = Self::MIN_HEADER_LENGTH..self.ihl().get() as usize * 4;
-        &mut self.data.as_mut()[range]
+        let header_len = self.ihl().get() as usize * 4;
+        &mut self.data.as_mut()[Self::MIN_HEADER_LENGTH..header_len]
     }
 
     /// Get the mutable payload.
