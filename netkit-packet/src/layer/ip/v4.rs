@@ -325,6 +325,7 @@ where
     }
 
     /// Get the TCP layer if the protocol is TCP.
+    #[inline]
     pub fn tcp(&self) -> Option<Tcp<&[u8]>> {
         if self.protocol().get() == IpProtocol::Tcp {
             Tcp::new(self.payload()).ok()
@@ -334,6 +335,7 @@ where
     }
 
     /// Get the UDP layer if the protocol is UDP.
+    #[inline]
     pub fn udp(&self) -> Option<Udp<&[u8]>> {
         if self.protocol().get() == IpProtocol::Udp {
             Udp::new(self.payload()).ok()
@@ -650,6 +652,29 @@ impl Ipv4Builder {
     }
 
     /// Build the Ipv4 layer.
+    ///
+    /// This automatically calculates:
+    /// - `ihl` if not set (based on options length)
+    /// - `total_length` if not set (based on IHL and payload size)
+    /// - `checksum` if not set (calculated from header contents)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use netkit_packet::prelude::*;
+    /// # use netkit_packet::layer::ip::Ipv4Builder;
+    /// # use std::net::Ipv4Addr;
+    /// let ipv4 = Ipv4Builder::new()
+    ///     .src(Ipv4Addr::new(192, 168, 1, 1))
+    ///     .dst(Ipv4Addr::new(192, 168, 1, 2))
+    ///     .protocol(IpProtocol::Tcp)
+    ///     .payload(vec![1, 2, 3, 4])
+    ///     .build();
+    ///
+    /// // Total length and checksum are automatically calculated
+    /// assert_eq!(ipv4.total_length().get(), 24); // 20 + 4
+    /// assert!(ipv4.validate_checksum().is_ok());
+    /// ```
     pub fn build(&self) -> Ipv4<Vec<u8>> {
         // Calculate the ihl
         // 1. if ihl is set, use it
@@ -677,13 +702,16 @@ impl Ipv4Builder {
         ipv4.ttl_mut().set(self.ttl.unwrap_or(64));
         ipv4.protocol_mut()
             .set(self.protocol.unwrap_or(IpProtocol::Reserved(255)));
-        ipv4.checksum_mut().set(self.checksum.unwrap_or(0));
         ipv4.src_mut()
             .set(self.src.unwrap_or(Ipv4Addr::UNSPECIFIED));
         ipv4.dst_mut()
             .set(self.dst.unwrap_or(Ipv4Addr::UNSPECIFIED));
         ipv4.options_mut().copy_from_slice(self.options.as_ref());
         ipv4.payload_mut().copy_from_slice(self.payload.as_ref());
+
+        // Auto-calculate checksum if not explicitly set
+        let checksum = self.checksum.unwrap_or_else(|| ipv4.calculate_checksum());
+        ipv4.checksum_mut().set(checksum);
 
         ipv4
     }
