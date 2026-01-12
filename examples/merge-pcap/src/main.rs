@@ -60,6 +60,14 @@ struct Cli {
     /// The precision of the timestamp
     #[arg(long, action = ArgAction::SetTrue)]
     nanoseconds: Option<bool>,
+
+    /// Keep subsecond precision when erasing timestamps
+    ///
+    /// If true and erase_timestamp is also true, the first packet timestamp
+    /// of each input will be set to start_time + subsecond part (e.g., 0.123456789)
+    /// instead of exactly start_time (e.g., 0.000000000).
+    #[arg(long, action = ArgAction::SetTrue)]
+    keep_subsec: Option<bool>,
 }
 
 impl Cli {
@@ -82,6 +90,10 @@ impl Cli {
 
         if let Some(nanoseconds) = config.nanoseconds {
             self.nanoseconds = Some(nanoseconds);
+        }
+
+        if let Some(keep_subsec) = config.keep_subsec {
+            self.keep_subsec = Some(keep_subsec);
         }
     }
 }
@@ -214,6 +226,7 @@ impl InputFile {
             first_packet_time: None,
             last_packet_time: 0,
             erase_timestamp: cli.erase_timestamp.unwrap_or(false),
+            keep_subsec: cli.keep_subsec.unwrap_or(false),
             pg,
             rng: StdRng::from_os_rng(),
             src_ip_pool,
@@ -230,6 +243,7 @@ struct InputFileIterator {
     first_packet_time: Option<i64>,
     last_packet_time: i64,
     erase_timestamp: bool,
+    keep_subsec: bool,
     pg: ProgressBar,
     rng: StdRng,
     src_ip_pool: Vec<Ipv4Addr>,
@@ -285,9 +299,17 @@ impl Iterator for InputFileIterator {
                 // A new group
 
                 if self.erase_timestamp {
-                    new_ts = (self.file.start_time[(self.current / self.file.repeat) as usize]
+                    let base_time = (self.file.start_time[(self.current / self.file.repeat) as usize]
                         as i64)
                         * 1_000_000_000;
+
+                    // If keep_subsec is true, preserve the subsecond part of the original timestamp
+                    if self.keep_subsec {
+                        let subsec = timestamp % 1_000_000_000;
+                        new_ts = base_time + subsec;
+                    } else {
+                        new_ts = base_time;
+                    }
                 } else {
                     new_ts = timestamp
                         + (self.file.start_time[(self.current / self.file.repeat) as usize] as i64)
