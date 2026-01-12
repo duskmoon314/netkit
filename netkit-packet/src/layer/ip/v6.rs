@@ -104,7 +104,9 @@ where
         if total_length > data.len() {
             return Err(Ipv6Error::InvalidPayloadLength(format!(
                 "Payload length {} requires total {} bytes, but data length is {}",
-                payload_length, total_length, data.len()
+                payload_length,
+                total_length,
+                data.len()
             )));
         }
 
@@ -449,9 +451,7 @@ impl Ipv6Builder {
 
     /// Build the Ipv6 layer.
     pub fn build(&self) -> Ipv6<Vec<u8>> {
-        let payload_length = self
-            .payload_length
-            .unwrap_or(self.payload.len() as u16);
+        let payload_length = self.payload_length.unwrap_or(self.payload.len() as u16);
 
         let total_length = Ipv6::<Vec<u8>>::MIN_HEADER_LENGTH + payload_length as usize;
 
@@ -517,12 +517,10 @@ mod tests {
             0x11, // next header: UDP
             0x40, // hop limit: 64
             // src: 2001:db8::1
-            0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-            // dst: 2001:db8::2
-            0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-            // UDP header + payload
+            0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x01, // dst: 2001:db8::2
+            0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x02, // UDP header + payload
             0x04, 0xd2, 0x04, 0xd3, // src port 1234, dst port 1235
             0x00, 0x0c, // length 12
             0x00, 0x00, // checksum 0
@@ -537,8 +535,14 @@ mod tests {
         assert_eq!(ipv6.payload_length().get(), 12);
         assert_eq!(ipv6.next_header().get(), IpProtocol::Udp);
         assert_eq!(ipv6.hop_limit().get(), 64);
-        assert_eq!(ipv6.src().get(), Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
-        assert_eq!(ipv6.dst().get(), Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 2));
+        assert_eq!(
+            ipv6.src().get(),
+            Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)
+        );
+        assert_eq!(
+            ipv6.dst().get(),
+            Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 2)
+        );
     }
 
     #[test]
@@ -552,8 +556,14 @@ mod tests {
 
         assert_eq!(ipv6.version().get(), 6);
         assert_eq!(ipv6.payload_length().get(), 4);
-        assert_eq!(ipv6.src().get(), Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
-        assert_eq!(ipv6.dst().get(), Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 2));
+        assert_eq!(
+            ipv6.src().get(),
+            Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)
+        );
+        assert_eq!(
+            ipv6.dst().get(),
+            Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 2)
+        );
         assert_eq!(ipv6.next_header().get(), IpProtocol::Udp);
         assert_eq!(ipv6.payload(), &[1, 2, 3, 4]);
     }
@@ -630,12 +640,10 @@ mod tests {
             0x06, // next header: TCP
             0x40, // hop limit: 64
             // src: 2001:db8::1
-            0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-            // dst: 2001:db8::2
-            0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-            // TCP header (minimal)
+            0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x01, // dst: 2001:db8::2
+            0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x02, // TCP header (minimal)
             0x04, 0xd2, // src port 1234
             0x00, 0x50, // dst port 80
             0x00, 0x00, 0x00, 0x00, // seq

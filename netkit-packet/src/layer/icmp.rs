@@ -15,9 +15,8 @@
 
 pub mod v4;
 pub use v4::{
-    DestUnreachCode, IcmpDestUnreach, IcmpEcho, IcmpParamProblem, IcmpRedirect,
-    IcmpTimeExceeded, Icmpv4, Icmpv4EchoBuilder, Icmpv4Error, Icmpv4Type, RedirectCode,
-    TimeExceededCode,
+    DestUnreachCode, IcmpDestUnreach, IcmpEcho, IcmpParamProblem, IcmpRedirect, IcmpTimeExceeded,
+    Icmpv4, Icmpv4EchoBuilder, Icmpv4Error, Icmpv4Type, RedirectCode, TimeExceededCode,
 };
 
 pub mod v6;

@@ -130,9 +130,7 @@ where
     #[inline]
     pub fn echo(&self) -> Option<IcmpEcho<&[u8]>> {
         match self.msg_type().get() {
-            Icmpv4Type::EchoRequest | Icmpv4Type::EchoReply => {
-                IcmpEcho::new(self.data.as_ref())
-            }
+            Icmpv4Type::EchoRequest | Icmpv4Type::EchoReply => IcmpEcho::new(self.data.as_ref()),
             _ => None,
         }
     }
@@ -266,9 +264,7 @@ where
     #[inline]
     pub fn echo_mut(&mut self) -> Option<IcmpEcho<&mut [u8]>> {
         match self.msg_type().get() {
-            Icmpv4Type::EchoRequest | Icmpv4Type::EchoReply => {
-                IcmpEcho::new(self.data.as_mut())
-            }
+            Icmpv4Type::EchoRequest | Icmpv4Type::EchoReply => IcmpEcho::new(self.data.as_mut()),
             _ => None,
         }
     }
