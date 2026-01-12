@@ -344,6 +344,16 @@ where
         }
     }
 
+    /// Get the ICMP layer if the protocol is ICMP.
+    #[inline]
+    pub fn icmp(&self) -> Option<Icmpv4<&[u8]>> {
+        if self.protocol().get() == IpProtocol::Icmp {
+            Icmpv4::new(self.payload()).ok()
+        } else {
+            None
+        }
+    }
+
     /// Get the flow id formed by ip, port and protocol.
     ///
     /// # Arguments

@@ -2,6 +2,7 @@
 
 pub mod dns;
 pub mod eth;
+pub mod icmp;
 pub mod ip;
 pub mod sll;
 pub mod tcp;
@@ -15,6 +16,13 @@ pub mod prelude {
     pub use super::vlan::{Vlan, VlanError};
 
     pub use super::ip::{IpProtocol, Ipv4, Ipv4Error, Ipv6, Ipv6Error};
+
+    pub use super::icmp::{
+        Icmpv4, Icmpv4EchoBuilder, Icmpv4Error, Icmpv4Type,
+        Icmpv6, Icmpv6Error, Icmpv6Type,
+        IcmpEcho, IcmpDestUnreach,
+        DestUnreachCode, RedirectCode, TimeExceededCode,
+    };
 
     pub use super::udp::{Udp, UdpError};
 

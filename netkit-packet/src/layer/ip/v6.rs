@@ -187,6 +187,7 @@ where
     }
 
     /// Get the TCP layer if the next header is TCP.
+    #[inline]
     pub fn tcp(&self) -> Option<Tcp<&[u8]>> {
         if self.next_header().get() == IpProtocol::Tcp {
             Tcp::new(self.payload()).ok()
@@ -196,9 +197,20 @@ where
     }
 
     /// Get the UDP layer if the next header is UDP.
+    #[inline]
     pub fn udp(&self) -> Option<Udp<&[u8]>> {
         if self.next_header().get() == IpProtocol::Udp {
             Udp::new(self.payload()).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Get the ICMPv6 layer if the next header is ICMPv6.
+    #[inline]
+    pub fn icmpv6(&self) -> Option<Icmpv6<&[u8]>> {
+        if self.next_header().get() == IpProtocol::Ipv6Icmp {
+            Icmpv6::new(self.payload()).ok()
         } else {
             None
         }
