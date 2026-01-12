@@ -218,6 +218,23 @@ impl InputFile {
             })
             .collect::<Vec<Ipv4Addr>>();
 
+        let src_ip_maps = self
+            .srcipmap
+            .iter()
+            .filter_map(|m| match m {
+                IpMap::Map(src, dst) => Some((*src, *dst)),
+                _ => None,
+            })
+            .collect::<Vec<(ipnet::IpNet, ipnet::IpNet)>>();
+        let dst_ip_maps = self
+            .dstipmap
+            .iter()
+            .filter_map(|m| match m {
+                IpMap::Map(src, dst) => Some((*src, *dst)),
+                _ => None,
+            })
+            .collect::<Vec<(ipnet::IpNet, ipnet::IpNet)>>();
+
         InputFileIterator {
             file: self,
             reader,
@@ -231,6 +248,8 @@ impl InputFile {
             rng: StdRng::from_os_rng(),
             src_ip_pool,
             dst_ip_pool,
+            src_ip_maps,
+            dst_ip_maps,
         }
     }
 }
@@ -248,6 +267,8 @@ struct InputFileIterator {
     rng: StdRng,
     src_ip_pool: Vec<Ipv4Addr>,
     dst_ip_pool: Vec<Ipv4Addr>,
+    src_ip_maps: Vec<(ipnet::IpNet, ipnet::IpNet)>,
+    dst_ip_maps: Vec<(ipnet::IpNet, ipnet::IpNet)>,
 }
 
 impl Iterator for InputFileIterator {
@@ -299,9 +320,9 @@ impl Iterator for InputFileIterator {
                 // A new group
 
                 if self.erase_timestamp {
-                    let base_time = (self.file.start_time[(self.current / self.file.repeat) as usize]
-                        as i64)
-                        * 1_000_000_000;
+                    let base_time =
+                        (self.file.start_time[(self.current / self.file.repeat) as usize] as i64)
+                            * 1_000_000_000;
 
                     // If keep_subsec is true, preserve the subsecond part of the original timestamp
                     if self.keep_subsec {
@@ -341,7 +362,11 @@ impl Iterator for InputFileIterator {
 
         let mut items = vec![packet; self.file.parallel as usize];
 
-        if self.src_ip_pool.is_empty() && self.dst_ip_pool.is_empty() {
+        if self.src_ip_pool.is_empty()
+            && self.dst_ip_pool.is_empty()
+            && self.src_ip_maps.is_empty()
+            && self.dst_ip_maps.is_empty()
+        {
             return Some(items);
         }
 
@@ -356,17 +381,51 @@ impl Iterator for InputFileIterator {
                 }
             };
 
-            // TODO: handle IpMap::Map case
+            // Handle source IP mapping
+            let mut src_mapped = false;
+            for (src_net, dst_net) in &self.src_ip_maps {
+                if let (ipnet::IpNet::V4(src_v4), ipnet::IpNet::V4(dst_v4)) = (src_net, dst_net) {
+                    let current_ip = ipv4.src().get();
+                    if src_v4.contains(&current_ip) {
+                        // Use dst_net's network part with current_ip's host part under dst_net's mask
+                        let dst_network = u32::from(dst_v4.network());
+                        let dst_hostmask = u32::from(dst_v4.hostmask());
+                        let host_part = u32::from(current_ip) & dst_hostmask;
+                        let new_ip = Ipv4Addr::from(dst_network | host_part);
+                        ipv4.src_mut().set(new_ip);
+                        src_mapped = true;
+                        break;
+                    }
+                }
+            }
 
-            if !self.src_ip_pool.is_empty() {
+            // If not mapped by IpMap::Map, use random pool selection
+            if !src_mapped && !self.src_ip_pool.is_empty() {
                 let src_ip = self.src_ip_pool.choose(&mut self.rng).unwrap();
-
                 ipv4.src_mut().set(*src_ip);
             }
 
-            if !self.dst_ip_pool.is_empty() {
-                let dst_ip = self.dst_ip_pool.choose(&mut self.rng).unwrap();
+            // Handle destination IP mapping
+            let mut dst_mapped = false;
+            for (src_net, dst_net) in &self.dst_ip_maps {
+                if let (ipnet::IpNet::V4(src_v4), ipnet::IpNet::V4(dst_v4)) = (src_net, dst_net) {
+                    let current_ip = ipv4.dst().get();
+                    if src_v4.contains(&current_ip) {
+                        // Use dst_net's network part with current_ip's host part under dst_net's mask
+                        let dst_network = u32::from(dst_v4.network());
+                        let dst_hostmask = u32::from(dst_v4.hostmask());
+                        let host_part = u32::from(current_ip) & dst_hostmask;
+                        let new_ip = Ipv4Addr::from(dst_network | host_part);
+                        ipv4.dst_mut().set(new_ip);
+                        dst_mapped = true;
+                        break;
+                    }
+                }
+            }
 
+            // If not mapped by IpMap::Map, use random pool selection
+            if !dst_mapped && !self.dst_ip_pool.is_empty() {
+                let dst_ip = self.dst_ip_pool.choose(&mut self.rng).unwrap();
                 ipv4.dst_mut().set(*dst_ip);
             }
         }
@@ -446,8 +505,10 @@ fn main() -> anyhow::Result<()> {
     let mut output_file = std::fs::File::create(&output_file)
         .map_err(|e| anyhow!("Failed to create output file: {}", e))?;
 
-    let mut packet_heap: BinaryHeap<PacketHeapItem> =
-        BinaryHeap::with_capacity(args.input_files.len());
+    // Calculate total number of parallel streams to bound heap size
+    let total_streams: usize = args.input_files.iter().map(|f| f.parallel as usize).sum();
+
+    let mut packet_heap: BinaryHeap<PacketHeapItem> = BinaryHeap::with_capacity(total_streams);
 
     let mut input_files = args
         .input_files
@@ -491,15 +552,16 @@ fn main() -> anyhow::Result<()> {
     while let Some(item) = packet_heap.pop() {
         // debug!("Processing packet: {item:?}");
 
-        let input_file = &mut input_files[item.index];
-
         pcap_writer
             .write_packet(&item.packet)
             .map_err(|e| anyhow!("Failed to write packet: {}", e))?;
 
         write_pg.inc(1);
 
-        if packet_heap.len() < args.input_files.len() {
+        // Pull next packet only if heap size drops below total_streams
+        // This bounds memory while maintaining temporal ordering via min-heap
+        if packet_heap.len() < total_streams {
+            let input_file = &mut input_files[item.index];
             if let Some(next_item) = input_file.next() {
                 packet_heap.extend(next_item.into_iter().map(|packet| PacketHeapItem {
                     index: item.index,
