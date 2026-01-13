@@ -27,6 +27,8 @@
 use std::cmp::min;
 use std::io::{BufReader, BufWriter, Read, Write};
 
+use log::warn;
+
 use crate::error::{CaptureError, CaptureResult};
 use crate::linktype::LinkType;
 use crate::packet::Packet;
@@ -254,15 +256,22 @@ impl<R: Read> PcapReader<R> {
         };
 
         // Read packet data
-        let data_len = min(header.incl_len, self.header.snaplen) as usize;
-        let mut data = vec![0u8; data_len];
+        // let data_len = min(header.incl_len, self.header.snaplen) as usize;
+        if header.incl_len > self.header.snaplen {
+            warn!(
+                "Packet incl_len {} exceeds snaplen {}",
+                header.incl_len, self.header.snaplen
+            );
+        }
+
+        let mut data = vec![0u8; header.incl_len as usize];
 
         match self.reader.read_exact(&mut data) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                 return Err(CaptureError::TruncatedPacket {
-                    expected: data_len,
-                    actual: 0, // We don't know how many bytes were actually read
+                    expected: header.incl_len as usize,
+                    msg: e.to_string(),
                 });
             }
             Err(e) => return Err(e.into()),

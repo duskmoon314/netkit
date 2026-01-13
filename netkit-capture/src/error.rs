@@ -18,8 +18,8 @@ pub enum CaptureError {
     UnsupportedLinkType(u32),
 
     /// Packet data is truncated or incomplete.
-    #[error("truncated packet: expected {expected} bytes, got {actual}")]
-    TruncatedPacket { expected: usize, actual: usize },
+    #[error("truncated packet: expected {expected} bytes. {msg}")]
+    TruncatedPacket { expected: usize, msg: String },
 
     /// Invalid block in pcapng file.
     #[error("invalid block: {0}")]
