@@ -2,6 +2,7 @@
 
 use std::ptr;
 
+pub mod checksum;
 pub mod field;
 pub mod test_enum;
 

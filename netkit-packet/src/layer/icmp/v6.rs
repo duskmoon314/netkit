@@ -67,6 +67,15 @@ pub enum Icmpv6Error {
     /// Invalid ICMPv6 length.
     #[error("Invalid ICMPv6 length: Length {0} is less than minimum 8")]
     InvalidLength(usize),
+
+    /// Invalid ICMPv6 checksum.
+    #[error("Invalid ICMPv6 checksum: Expected {expected:#06x}, got {actual:#06x}")]
+    InvalidChecksum {
+        /// Expected checksum value.
+        expected: u16,
+        /// Actual checksum value found in the packet.
+        actual: u16,
+    },
 }
 
 /// Minimum ICMPv6 header length.
@@ -172,6 +181,62 @@ where
     #[inline]
     pub fn message_body(&self) -> &[u8] {
         &self.data.as_ref()[Self::FIELD_MESSAGE_BODY]
+    }
+
+    /// Calculate the ICMPv6 checksum.
+    ///
+    /// The checksum is calculated over the IPv6 pseudo-header and ICMPv6 message.
+    /// Unlike ICMPv4, ICMPv6 checksum is mandatory and always includes the IPv6 pseudo-header.
+    ///
+    /// ## Parameters
+    /// - `src`: Source IPv6 address
+    /// - `dst`: Destination IPv6 address
+    ///
+    /// ## Example
+    /// ```ignore
+    /// use netkit_packet::layer::icmp::v6::Icmpv6;
+    /// use core::net::Ipv6Addr;
+    ///
+    /// let icmpv6_data = [/* ICMPv6 packet data */];
+    /// let icmpv6 = Icmpv6::new(&icmpv6_data[..]).unwrap();
+    /// let src = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1);
+    /// let dst = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 2);
+    /// let checksum = icmpv6.calculate_checksum(src, dst);
+    /// ```
+    pub fn calculate_checksum(&self, src: core::net::Ipv6Addr, dst: core::net::Ipv6Addr) -> u16 {
+        use crate::utils::checksum::{calculate_with_pseudo, ipv6_pseudo_header};
+
+        let icmpv6_length = self.data.as_ref().len() as u32;
+        let pseudo = ipv6_pseudo_header(src, dst, 58, icmpv6_length); // 58 = ICMPv6
+
+        // Create a copy of the ICMPv6 data with checksum field set to 0
+        let mut icmpv6_data = self.data.as_ref().to_vec();
+        icmpv6_data[Self::FIELD_CHECKSUM].copy_from_slice(&[0, 0]);
+
+        calculate_with_pseudo(&pseudo, &icmpv6_data)
+    }
+
+    /// Validate the ICMPv6 checksum.
+    ///
+    /// Returns `Ok(())` if the checksum is valid.
+    /// Returns `Err(Icmpv6Error::InvalidChecksum)` if the checksum is invalid.
+    ///
+    /// ## Parameters
+    /// - `src`: Source IPv6 address
+    /// - `dst`: Destination IPv6 address
+    pub fn validate_checksum(
+        &self,
+        src: core::net::Ipv6Addr,
+        dst: core::net::Ipv6Addr,
+    ) -> Result<(), Icmpv6Error> {
+        let expected = self.calculate_checksum(src, dst);
+        let actual = self.checksum().get();
+
+        if expected != actual {
+            return Err(Icmpv6Error::InvalidChecksum { expected, actual });
+        }
+
+        Ok(())
     }
 }
 

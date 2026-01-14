@@ -11,6 +11,15 @@ pub enum TcpError {
     /// Invalid Tcp length.
     #[error("Invalid Tcp length: Length {0} is less than 8")]
     InvalidLength(usize),
+
+    /// Invalid TCP checksum.
+    #[error("Invalid TCP checksum: Expected {expected:#06x}, got {actual:#06x}")]
+    InvalidChecksum {
+        /// Expected checksum value.
+        expected: u16,
+        /// Actual checksum value found in the packet.
+        actual: u16,
+    },
 }
 
 field_spec!(PortSpec, u16, u16);
@@ -203,6 +212,124 @@ where
     pub fn payload(&self) -> &[u8] {
         let range = self.data_offset().get() as usize * 4..;
         &self.data.as_ref()[range]
+    }
+
+    /// Calculate the TCP checksum for IPv4.
+    ///
+    /// The checksum is calculated over the IPv4 pseudo-header, TCP header (including options), and payload.
+    ///
+    /// ## Parameters
+    /// - `src`: Source IPv4 address
+    /// - `dst`: Destination IPv4 address
+    ///
+    /// ## Example
+    /// ```ignore
+    /// use netkit_packet::layer::tcp::Tcp;
+    /// use core::net::Ipv4Addr;
+    ///
+    /// let tcp_data = [/* TCP packet data */];
+    /// let tcp = Tcp::new(&tcp_data[..]).unwrap();
+    /// let src = Ipv4Addr::new(192, 168, 1, 1);
+    /// let dst = Ipv4Addr::new(192, 168, 1, 2);
+    /// let checksum = tcp.calculate_checksum_ipv4(src, dst);
+    /// ```
+    pub fn calculate_checksum_ipv4(
+        &self,
+        src: core::net::Ipv4Addr,
+        dst: core::net::Ipv4Addr,
+    ) -> u16 {
+        use crate::utils::checksum::{calculate_with_pseudo, ipv4_pseudo_header};
+
+        let tcp_length = self.data.as_ref().len() as u16;
+        let pseudo = ipv4_pseudo_header(src, dst, 6, tcp_length); // 6 = TCP
+
+        // Create a copy of the TCP data with checksum field set to 0
+        let mut tcp_data = self.data.as_ref().to_vec();
+        tcp_data[Self::FIELD_CHECKSUM].copy_from_slice(&[0, 0]);
+
+        calculate_with_pseudo(&pseudo, &tcp_data)
+    }
+
+    /// Validate the TCP checksum for IPv4.
+    ///
+    /// Returns `Ok(())` if the checksum is valid.
+    /// Returns `Err(TcpError::InvalidChecksum)` if the checksum is invalid.
+    ///
+    /// ## Parameters
+    /// - `src`: Source IPv4 address
+    /// - `dst`: Destination IPv4 address
+    pub fn validate_checksum_ipv4(
+        &self,
+        src: core::net::Ipv4Addr,
+        dst: core::net::Ipv4Addr,
+    ) -> Result<(), TcpError> {
+        let expected = self.calculate_checksum_ipv4(src, dst);
+        let actual = self.checksum().get();
+
+        if expected != actual {
+            return Err(TcpError::InvalidChecksum { expected, actual });
+        }
+
+        Ok(())
+    }
+
+    /// Calculate the TCP checksum for IPv6.
+    ///
+    /// The checksum is calculated over the IPv6 pseudo-header, TCP header (including options), and payload.
+    ///
+    /// ## Parameters
+    /// - `src`: Source IPv6 address
+    /// - `dst`: Destination IPv6 address
+    ///
+    /// ## Example
+    /// ```ignore
+    /// use netkit_packet::layer::tcp::Tcp;
+    /// use core::net::Ipv6Addr;
+    ///
+    /// let tcp_data = [/* TCP packet data */];
+    /// let tcp = Tcp::new(&tcp_data[..]).unwrap();
+    /// let src = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1);
+    /// let dst = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 2);
+    /// let checksum = tcp.calculate_checksum_ipv6(src, dst);
+    /// ```
+    pub fn calculate_checksum_ipv6(
+        &self,
+        src: core::net::Ipv6Addr,
+        dst: core::net::Ipv6Addr,
+    ) -> u16 {
+        use crate::utils::checksum::{calculate_with_pseudo, ipv6_pseudo_header};
+
+        let tcp_length = self.data.as_ref().len() as u32;
+        let pseudo = ipv6_pseudo_header(src, dst, 6, tcp_length); // 6 = TCP
+
+        // Create a copy of the TCP data with checksum field set to 0
+        let mut tcp_data = self.data.as_ref().to_vec();
+        tcp_data[Self::FIELD_CHECKSUM].copy_from_slice(&[0, 0]);
+
+        calculate_with_pseudo(&pseudo, &tcp_data)
+    }
+
+    /// Validate the TCP checksum for IPv6.
+    ///
+    /// Returns `Ok(())` if the checksum is valid.
+    /// Returns `Err(TcpError::InvalidChecksum)` if the checksum is invalid.
+    ///
+    /// ## Parameters
+    /// - `src`: Source IPv6 address
+    /// - `dst`: Destination IPv6 address
+    pub fn validate_checksum_ipv6(
+        &self,
+        src: core::net::Ipv6Addr,
+        dst: core::net::Ipv6Addr,
+    ) -> Result<(), TcpError> {
+        let expected = self.calculate_checksum_ipv6(src, dst);
+        let actual = self.checksum().get();
+
+        if expected != actual {
+            return Err(TcpError::InvalidChecksum { expected, actual });
+        }
+
+        Ok(())
     }
 }
 

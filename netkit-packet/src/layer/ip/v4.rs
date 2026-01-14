@@ -204,36 +204,32 @@ where
     ///
     /// This calculates what the checksum field should be based on the current
     /// header contents (with the checksum field treated as zero).
+    ///
+    /// ## Example
+    /// ```
+    /// use netkit_packet::layer::ip::v4::Ipv4;
+    ///
+    /// # // Minimal IPv4 packet (20-byte header, no payload)
+    /// # let ipv4_data = [
+    /// #     0x45, 0x00, 0x00, 0x14, // Version, IHL, DSCP, ECN, Total Length (20)
+    /// #     0x00, 0x00, 0x00, 0x00, // Identification, Flags, Fragment Offset
+    /// #     0x40, 0x11, 0x00, 0x00, // TTL, Protocol (UDP), Checksum (will be calculated)
+    /// #     0x7f, 0x00, 0x00, 0x01, // Source IP: 127.0.0.1
+    /// #     0x7f, 0x00, 0x00, 0x02, // Dest IP: 127.0.0.2
+    /// # ];
+    /// let ipv4 = Ipv4::new(&ipv4_data[..]).unwrap();
+    /// let checksum = ipv4.calculate_checksum();
+    /// ```
     pub fn calculate_checksum(&self) -> u16 {
-        let data = self.data.as_ref();
+        use crate::utils::checksum::internet_checksum;
+
         let header_len = self.ihl().get() as usize * 4;
 
-        let mut sum: u32 = 0;
+        // Create a copy of the header with checksum field set to 0
+        let mut header_data = self.data.as_ref()[..header_len].to_vec();
+        header_data[Self::FIELD_CHECKSUM].copy_from_slice(&[0, 0]);
 
-        // Sum all 16-bit words in the header, treating checksum field as 0
-        for i in (0..header_len).step_by(2) {
-            if i == Self::FIELD_CHECKSUM.start {
-                // Skip the checksum field (treat as 0)
-                continue;
-            }
-
-            let word = if i + 1 < header_len {
-                u16::from_be_bytes([data[i], data[i + 1]])
-            } else {
-                // Odd length - pad with zero
-                u16::from_be_bytes([data[i], 0])
-            };
-
-            sum += word as u32;
-        }
-
-        // Fold 32-bit sum to 16 bits
-        while sum >> 16 != 0 {
-            sum = (sum & 0xFFFF) + (sum >> 16);
-        }
-
-        // One's complement
-        !sum as u16
+        internet_checksum(&header_data)
     }
 
     /// Validate the header checksum.

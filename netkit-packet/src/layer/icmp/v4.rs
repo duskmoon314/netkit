@@ -202,34 +202,23 @@ where
     ///
     /// This calculates what the checksum field should be based on the current
     /// packet contents (with the checksum field treated as zero).
+    ///
+    /// ## Example
+    /// ```
+    /// use netkit_packet::layer::icmp::v4::Icmpv4;
+    ///
+    /// # let icmp_data = [0x08, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02];
+    /// let icmpv4 = Icmpv4::new(&icmp_data[..]).unwrap();
+    /// let checksum = icmpv4.calculate_checksum();
+    /// ```
     pub fn calculate_checksum(&self) -> u16 {
-        let data = self.data.as_ref();
-        let mut sum: u32 = 0;
+        use crate::utils::checksum::internet_checksum;
 
-        // Sum all 16-bit words, treating checksum field as 0
-        for (i, chunk) in data.chunks(2).enumerate() {
-            if i == 1 {
-                // Skip the checksum field (bytes 2-3)
-                continue;
-            }
+        // Create a copy of the ICMP data with checksum field set to 0
+        let mut icmp_data = self.data.as_ref().to_vec();
+        icmp_data[Self::FIELD_CHECKSUM].copy_from_slice(&[0, 0]);
 
-            let word = if chunk.len() == 2 {
-                u16::from_be_bytes([chunk[0], chunk[1]])
-            } else {
-                // Odd length - pad with zero
-                u16::from_be_bytes([chunk[0], 0])
-            };
-
-            sum += word as u32;
-        }
-
-        // Fold 32-bit sum to 16 bits
-        while sum >> 16 != 0 {
-            sum = (sum & 0xFFFF) + (sum >> 16);
-        }
-
-        // One's complement
-        !sum as u16
+        internet_checksum(&icmp_data)
     }
 
     /// Validate the checksum.

@@ -131,6 +131,137 @@ where
     pub fn payload(&self) -> &[u8] {
         &self.data.as_ref()[Self::FIELD_PAYLOAD]
     }
+
+    /// Calculate the UDP checksum for IPv4.
+    ///
+    /// The checksum is calculated over the IPv4 pseudo-header, UDP header, and payload.
+    /// Note: UDP checksum is optional in IPv4 (can be 0).
+    ///
+    /// ## Parameters
+    /// - `src`: Source IPv4 address
+    /// - `dst`: Destination IPv4 address
+    ///
+    /// ## Example
+    /// ```ignore
+    /// use netkit_packet::layer::udp::Udp;
+    /// use core::net::Ipv4Addr;
+    ///
+    /// let udp_data = [/* UDP packet data */];
+    /// let udp = Udp::new(&udp_data[..]).unwrap();
+    /// let src = Ipv4Addr::new(192, 168, 1, 1);
+    /// let dst = Ipv4Addr::new(192, 168, 1, 2);
+    /// let checksum = udp.calculate_checksum_ipv4(src, dst);
+    /// ```
+    pub fn calculate_checksum_ipv4(
+        &self,
+        src: core::net::Ipv4Addr,
+        dst: core::net::Ipv4Addr,
+    ) -> u16 {
+        use crate::utils::checksum::{calculate_with_pseudo, ipv4_pseudo_header};
+
+        let length = self.length().get();
+        let pseudo = ipv4_pseudo_header(src, dst, 17, length); // 17 = UDP
+
+        // Create a copy of the UDP data with checksum field set to 0
+        let mut udp_data = self.data.as_ref().to_vec();
+        udp_data[Self::FIELD_CHECKSUM].copy_from_slice(&[0, 0]);
+
+        calculate_with_pseudo(&pseudo, &udp_data)
+    }
+
+    /// Validate the UDP checksum for IPv4.
+    ///
+    /// Returns `Ok(())` if the checksum is valid or if it's 0 (checksum disabled in IPv4).
+    /// Returns `Err(UdpError::InvalidChecksum)` if the checksum is invalid.
+    ///
+    /// ## Parameters
+    /// - `src`: Source IPv4 address
+    /// - `dst`: Destination IPv4 address
+    pub fn validate_checksum_ipv4(
+        &self,
+        src: core::net::Ipv4Addr,
+        dst: core::net::Ipv4Addr,
+    ) -> Result<(), UdpError> {
+        let checksum = self.checksum().get();
+
+        // In IPv4, UDP checksum of 0 means checksum is disabled
+        if checksum == 0 {
+            return Ok(());
+        }
+
+        let expected = self.calculate_checksum_ipv4(src, dst);
+        if expected != checksum {
+            return Err(UdpError::InvalidChecksum);
+        }
+
+        Ok(())
+    }
+
+    /// Calculate the UDP checksum for IPv6.
+    ///
+    /// The checksum is calculated over the IPv6 pseudo-header, UDP header, and payload.
+    /// Note: UDP checksum is mandatory in IPv6 (cannot be 0).
+    ///
+    /// ## Parameters
+    /// - `src`: Source IPv6 address
+    /// - `dst`: Destination IPv6 address
+    ///
+    /// ## Example
+    /// ```ignore
+    /// use netkit_packet::layer::udp::Udp;
+    /// use core::net::Ipv6Addr;
+    ///
+    /// let udp_data = [/* UDP packet data */];
+    /// let udp = Udp::new(&udp_data[..]).unwrap();
+    /// let src = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1);
+    /// let dst = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 2);
+    /// let checksum = udp.calculate_checksum_ipv6(src, dst);
+    /// ```
+    pub fn calculate_checksum_ipv6(
+        &self,
+        src: core::net::Ipv6Addr,
+        dst: core::net::Ipv6Addr,
+    ) -> u16 {
+        use crate::utils::checksum::{calculate_with_pseudo, ipv6_pseudo_header};
+
+        let length = self.length().get() as u32;
+        let pseudo = ipv6_pseudo_header(src, dst, 17, length); // 17 = UDP
+
+        // Create a copy of the UDP data with checksum field set to 0
+        let mut udp_data = self.data.as_ref().to_vec();
+        udp_data[Self::FIELD_CHECKSUM].copy_from_slice(&[0, 0]);
+
+        calculate_with_pseudo(&pseudo, &udp_data)
+    }
+
+    /// Validate the UDP checksum for IPv6.
+    ///
+    /// Returns `Ok(())` if the checksum is valid.
+    /// Returns `Err(UdpError::InvalidChecksum)` if the checksum is invalid.
+    /// Note: In IPv6, the UDP checksum cannot be 0 and must always be calculated.
+    ///
+    /// ## Parameters
+    /// - `src`: Source IPv6 address
+    /// - `dst`: Destination IPv6 address
+    pub fn validate_checksum_ipv6(
+        &self,
+        src: core::net::Ipv6Addr,
+        dst: core::net::Ipv6Addr,
+    ) -> Result<(), UdpError> {
+        let checksum = self.checksum().get();
+
+        // In IPv6, UDP checksum must not be 0
+        if checksum == 0 {
+            return Err(UdpError::InvalidChecksum);
+        }
+
+        let expected = self.calculate_checksum_ipv6(src, dst);
+        if expected != checksum {
+            return Err(UdpError::InvalidChecksum);
+        }
+
+        Ok(())
+    }
 }
 
 impl<T> Udp<T>
