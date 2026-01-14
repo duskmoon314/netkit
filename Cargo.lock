@@ -1795,6 +1795,7 @@ dependencies = [
 name = "netkit-capture"
 version = "0.1.0"
 dependencies = [
+ "log",
  "num_enum",
  "strum",
  "thiserror",

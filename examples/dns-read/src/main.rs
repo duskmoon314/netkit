@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 use log::{debug, error, info};
-use netkit::capture::{open_capture, LinkType};
+use netkit::capture::{LinkType, open_capture};
 use netkit::packet::layer::eth;
 use netkit::packet::prelude::*;
 
