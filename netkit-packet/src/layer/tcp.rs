@@ -25,7 +25,49 @@ field_spec!(UrgentPointerSpec, u16, u16);
 /// Minimum length of a Tcp packet.
 pub const MIN_HEADER_LENGTH: usize = 20;
 
-/// Transmission Control Protocol (TCP) layer.
+/// Transmission Control Protocol (TCP) Layer
+///
+/// ## Packet Format (RFC 9293)
+///
+/// ```text
+///  0                   1                   2                   3
+///  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |          Source Port          |       Destination Port        |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                        Sequence Number                        |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                    Acknowledgment Number                      |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// | Offset| Rsvd  |C|E|U|A|P|R|S|F|            Window             |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |           Checksum            |         Urgent Pointer        |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                    Options (if Offset > 5)    |    Padding    |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                             Data                              |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// ```
+///
+/// - **Source Port**: 16 bits - Source port number
+/// - **Destination Port**: 16 bits - Destination port number
+/// - **Sequence Number**: 32 bits - Sequence number of first data octet
+/// - **Acknowledgment Number**: 32 bits - Next sequence number expected
+/// - **Data Offset**: 4 bits - Header length in 32-bit words (minimum 5, maximum 15)
+/// - **Reserved**: 4 bits - Reserved for future use (must be zero)
+/// - **Flags**: 8 bits - Control flags:
+///   - **C (CWR)**: Congestion Window Reduced
+///   - **E (ECE)**: ECN-Echo
+///   - **U (URG)**: Urgent pointer field significant
+///   - **A (ACK)**: Acknowledgment field significant
+///   - **P (PSH)**: Push function
+///   - **R (RST)**: Reset the connection
+///   - **S (SYN)**: Synchronize sequence numbers
+///   - **F (FIN)**: No more data from sender
+/// - **Window**: 16 bits - Number of data octets the sender is willing to accept
+/// - **Checksum**: 16 bits - Checksum of header + data + pseudo-header
+/// - **Urgent Pointer**: 16 bits - Points to first octet following urgent data
+/// - **Options**: Variable - TCP options (if Data Offset > 5)
 pub struct Tcp<T>
 where
     T: AsRef<[u8]>,

@@ -35,7 +35,47 @@ field_spec!(NextHeaderSpec, IpProtocol, u8);
 field_spec!(HopLimitSpec, u8, u8);
 field_spec!(Ipv6AddrSpec, core::net::Ipv6Addr, u128);
 
-/// IPv6 layer.
+/// IPv6 (Internet Protocol version 6) Layer
+///
+/// ## Packet Format (RFC 8200)
+///
+/// ```text
+///  0                   1                   2                   3
+///  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |Version| Traffic Class |           Flow Label                  |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |         Payload Length        |  Next Header  |   Hop Limit   |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                                                               |
+/// +                                                               +
+/// |                                                               |
+/// +                         Source Address                        +
+/// |                                                               |
+/// +                                                               +
+/// |                                                               |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                                                               |
+/// +                                                               +
+/// |                                                               |
+/// +                      Destination Address                      +
+/// |                                                               |
+/// +                                                               +
+/// |                                                               |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// ```
+///
+/// - **Version**: 4 bits - IP version (always 6 for IPv6)
+/// - **Traffic Class**: 8 bits - Traffic class for QoS (similar to DSCP in IPv4)
+/// - **Flow Label**: 20 bits - Flow label for QoS handling
+/// - **Payload Length**: 16 bits - Length of payload (excludes header, max 65,535 bytes)
+/// - **Next Header**: 8 bits - Type of next header (same values as IPv4 Protocol field)
+/// - **Hop Limit**: 8 bits - Decremented by 1 at each hop (similar to TTL in IPv4)
+/// - **Source Address**: 128 bits - Source IPv6 address
+/// - **Destination Address**: 128 bits - Destination IPv6 address
+///
+/// **Note**: Unlike IPv4, IPv6 has a fixed 40-byte header with no options field.
+/// Extension headers are used instead via the Next Header field.
 pub struct Ipv6<T>
 where
     T: AsRef<[u8]>,

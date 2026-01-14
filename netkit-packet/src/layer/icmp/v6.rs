@@ -72,7 +72,32 @@ pub enum Icmpv6Error {
 /// Minimum ICMPv6 header length.
 pub const MIN_HEADER_LENGTH: usize = 8;
 
-/// ICMPv6 packet.
+/// ICMPv6 (Internet Control Message Protocol version 6) Packet
+///
+/// ## Packet Format (RFC 4443)
+///
+/// ```text
+///  0                   1                   2                   3
+///  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |     Type      |     Code      |          Checksum             |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                      Message Body (variable)                  |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// ```
+///
+/// - **Type**: 8 bits - ICMPv6 message type
+///   - Error messages (0-127): Destination Unreachable (1), Packet Too Big (2), Time Exceeded (3), Parameter Problem (4)
+///   - Informational messages (128-255): Echo Request (128), Echo Reply (129)
+///   - NDP messages: Router Solicitation (133), Router Advertisement (134), Neighbor Solicitation (135), Neighbor Advertisement (136), Redirect (137)
+/// - **Code**: 8 bits - Subtype code (meaning depends on Type)
+/// - **Checksum**: 16 bits - One's complement checksum of ICMPv6 message + IPv6 pseudo-header
+///   - Note: Unlike ICMPv4, the ICMPv6 checksum is mandatory and includes the IPv6 pseudo-header
+/// - **Message Body**: Variable - Content depends on Type and Code
+///
+/// **Note**: This is currently a simplified implementation. Future enhancements will include
+/// full support for Neighbor Discovery Protocol (NDP), Multicast Listener Discovery (MLD),
+/// and Path MTU Discovery.
 pub struct Icmpv6<T>
 where
     T: AsRef<[u8]>,

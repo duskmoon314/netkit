@@ -22,7 +22,35 @@ field_spec!(EthTypeSpec, EthType, u16);
 /// Minimum length of an Eth header.
 pub const MIN_HEADER_LENGTH: usize = 14;
 
-/// Ethernet layer.
+/// Ethernet (IEEE 802.3) Layer
+///
+/// ## Frame Format
+///
+/// ```text
+///  0                   1                   2                   3
+///  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                                                               |
+/// +                      Destination Address                     +
+/// |                                                               |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                                                               |
+/// +                         Source Address                       +
+/// |                                                               |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |           EtherType           |                               |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+/// |                            Payload                            |
+/// ~                              ...                              ~
+/// ```
+///
+/// - **Destination Address**: 48 bits - Destination MAC address
+/// - **Source Address**: 48 bits - Source MAC address
+/// - **EtherType**: 16 bits - Protocol type of payload (IPv4=0x0800, IPv6=0x86DD, ARP=0x0806, VLAN=0x8100)
+/// - **Payload**: Variable - Upper layer protocol data (minimum 46 bytes for valid Ethernet frame)
+///
+/// **Note**: This structure does not include the 7-byte preamble, 1-byte SFD, or 4-byte FCS
+/// which are typically handled at the physical layer.
 pub struct Eth<T>
 where
     T: AsRef<[u8]>,

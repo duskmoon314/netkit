@@ -28,7 +28,43 @@ field_spec!(ProtocolTypeSpec, EthType, u16);
 /// Minimum length of an SLL header.
 pub const MIN_HEADER_LENGTH: usize = 16;
 
-/// Linux cooked-mode capture (SLL) layer.
+/// Linux Cooked-Mode Capture (SLL) Layer
+///
+/// ## Packet Format
+///
+/// ```text
+///  0                   1                   2                   3
+///  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |         Packet Type           |        ARPHRD Type            |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |      Link-layer Address Length|                               |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+/// |                   Link-layer Address                          |
+/// +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                               |        Protocol Type          |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                            Payload                            |
+/// ~                              ...                              ~
+/// ```
+///
+/// - **Packet Type**: 16 bits - Packet direction and type
+///   - 0 = Packet sent to us by someone else
+///   - 1 = Packet broadcast by someone else
+///   - 2 = Packet multicast by someone else
+///   - 3 = Packet sent to someone else by someone else
+///   - 4 = Packet sent by us
+/// - **ARPHRD Type**: 16 bits - Link-layer device type (from Linux's if_arp.h)
+///   - 1 = Ethernet (10 or 100Mbps)
+///   - 512 = PPP
+///   - 772 = Loopback
+/// - **Link-layer Address Length**: 16 bits - Length of link-layer address (max 8 bytes)
+/// - **Link-layer Address**: 64 bits - Link-layer address (e.g., MAC address), padded to 8 bytes
+/// - **Protocol Type**: 16 bits - Protocol type (same as Ethernet EtherType: IPv4=0x0800, IPv6=0x86DD, etc.)
+/// - **Payload**: Variable - Upper layer protocol data
+///
+/// **Note**: SLL is used by libpcap/tcpdump when capturing on the Linux "any" device or
+/// other interfaces that don't have a standard link-layer header format.
 pub struct Sll<T>
 where
     T: AsRef<[u8]>,

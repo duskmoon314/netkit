@@ -54,7 +54,42 @@ field_spec!(ProtocolSpec, IpProtocol, u8, 0xFF);
 field_spec!(ChecksumSpec, u16, u16);
 field_spec!(Ipv4AddrSpec, core::net::Ipv4Addr, u32);
 
-/// Ipv4 layer.
+/// IPv4 (Internet Protocol version 4) Layer
+///
+/// ## Packet Format (RFC 791)
+///
+/// ```text
+///  0                   1                   2                   3
+///  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |Version|  IHL  |    DSCP   |ECN|          Total Length         |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |         Identification        |Flags|      Fragment Offset    |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |  Time to Live |    Protocol   |         Header Checksum       |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                       Source Address                          |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                    Destination Address                        |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                    Options (if IHL > 5)       |    Padding    |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// ```
+///
+/// - **Version**: 4 bits - IP version (always 4 for IPv4)
+/// - **IHL**: 4 bits - Internet Header Length in 32-bit words (minimum 5, maximum 15)
+/// - **DSCP**: 6 bits - Differentiated Services Code Point for QoS
+/// - **ECN**: 2 bits - Explicit Congestion Notification
+/// - **Total Length**: 16 bits - Total packet length including header and data (max 65,535 bytes)
+/// - **Identification**: 16 bits - Fragment identification
+/// - **Flags**: 3 bits - Control flags (Reserved, Don't Fragment, More Fragments)
+/// - **Fragment Offset**: 13 bits - Position of fragment in original datagram
+/// - **Time to Live**: 8 bits - Maximum hops before packet is discarded
+/// - **Protocol**: 8 bits - Next level protocol (TCP=6, UDP=17, ICMP=1, etc.)
+/// - **Header Checksum**: 16 bits - Checksum of the IP header only
+/// - **Source Address**: 32 bits - Source IPv4 address
+/// - **Destination Address**: 32 bits - Destination IPv4 address
+/// - **Options**: Variable - Optional fields (rarely used)
 pub struct Ipv4<T>
 where
     T: AsRef<[u8]>,

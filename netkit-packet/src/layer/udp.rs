@@ -21,7 +21,29 @@ field_spec!(ChecksumSpec, u16, u16);
 /// Minimum length of a Udp packet.
 pub const MIN_HEADER_LENGTH: usize = 8;
 
-/// User Datagram Protocol (UDP) layer.
+/// User Datagram Protocol (UDP) Layer
+///
+/// ## Packet Format (RFC 768)
+///
+/// ```text
+///  0                   1                   2                   3
+///  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |          Source Port          |       Destination Port        |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |            Length             |           Checksum            |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                             Data                              |
+/// ~                              ...                              ~
+/// ```
+///
+/// - **Source Port**: 16 bits - Source port number (optional, can be 0)
+/// - **Destination Port**: 16 bits - Destination port number
+/// - **Length**: 16 bits - Length of UDP header + data in bytes (minimum 8)
+/// - **Checksum**: 16 bits - Checksum of header + data + pseudo-header
+///   - Optional in IPv4 (can be 0 if not used)
+///   - Mandatory in IPv6 (must be calculated)
+/// - **Data**: Variable - Application data payload
 pub struct Udp<T>
 where
     T: AsRef<[u8]>,

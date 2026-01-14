@@ -44,10 +44,29 @@ pub enum Icmpv4Error {
 /// Minimum ICMPv4 header length.
 pub const MIN_HEADER_LENGTH: usize = 8;
 
-/// ICMPv4 packet.
+/// ICMPv4 (Internet Control Message Protocol version 4) Packet
+///
+/// ## Packet Format (RFC 792)
+///
+/// ```text
+///  0                   1                   2                   3
+///  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |     Type      |     Code      |          Checksum             |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                      Message Body (variable)                  |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// ```
+///
+/// - **Type**: 8 bits - ICMP message type
+///   - 0 = Echo Reply, 3 = Destination Unreachable, 8 = Echo Request,
+///   - 11 = Time Exceeded, 12 = Parameter Problem, 5 = Redirect, etc.
+/// - **Code**: 8 bits - Subtype code (meaning depends on Type)
+/// - **Checksum**: 16 bits - One's complement checksum of ICMP message
+/// - **Message Body**: Variable - Content depends on Type and Code
 ///
 /// This is the base ICMP packet. Use the accessor methods to get
-/// message-specific views.
+/// message-specific views like [`IcmpEcho`], [`IcmpDestUnreach`], etc.
 pub struct Icmpv4<T>
 where
     T: AsRef<[u8]>,
