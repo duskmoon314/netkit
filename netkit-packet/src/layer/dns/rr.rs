@@ -115,18 +115,15 @@ where
         &self.data
     }
 
-    /// Get the total length of the DnsResourceRecord
+    /// Get the total length of the DnsResourceRecord.
+    ///
+    /// Note: A DNS resource record is never empty - it always contains at least
+    /// a name, type, class, TTL, and rdlength fields.
     #[inline]
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         let rdlength = self.rdlength().get() as usize;
         self.name_len + 10 + rdlength
-    }
-
-    /// Unimplemented: Make clippy happy :)
-    #[inline]
-    pub const fn is_empty(&self) -> bool {
-        // Should DnsResourceRecord be `empty`?
-        unimplemented!()
     }
 
     /// Get the resource record name

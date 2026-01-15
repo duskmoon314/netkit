@@ -58,17 +58,14 @@ where
         &self.data
     }
 
-    /// Get the length of the DnsQuestion
+    /// Get the length of the DnsQuestion.
+    ///
+    /// Note: A DNS question is never empty - it always contains at least a name,
+    /// type, and class fields.
     #[inline]
+    #[allow(clippy::len_without_is_empty)]
     pub const fn len(&self) -> usize {
         self.name_len + 1 + 4 // name_len is index of null byte, +1 for null byte itself, +4 for type+class
-    }
-
-    /// Unimplemented: Make clippy happy :)
-    #[inline]
-    pub const fn is_empty(&self) -> bool {
-        // Should DnsQuestion be `empty`?
-        unimplemented!()
     }
 
     /// Get the question name
