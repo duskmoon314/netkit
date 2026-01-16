@@ -1,4 +1,6 @@
-//! ICMPv4 message types and codes.
+//! ICMPv4 message type and code definitions.
+//!
+//! See the [parent module](super) for implementation status of all ICMP message types.
 
 use num_enum::{FromPrimitive, IntoPrimitive};
 use strum::{AsRefStr, Display, EnumString};

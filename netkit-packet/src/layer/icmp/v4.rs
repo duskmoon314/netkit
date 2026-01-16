@@ -1,22 +1,66 @@
 //! ICMPv4 layer implementation.
+//!
+//! ## Implementation Status
+//!
+//! ### Error Messages (0-127)
+//!
+//! - [x] **Type 0**: Echo Reply - [`IcmpEcho`] - [RFC 792](https://www.rfc-editor.org/rfc/rfc792.html)
+//! - [x] **Type 3**: Destination Unreachable - [`IcmpDestUnreach`] - [RFC 792](https://www.rfc-editor.org/rfc/rfc792.html)
+//! - [ ] **Type 4**: Source Quench - Deprecated ([RFC 6633](https://www.rfc-editor.org/rfc/rfc6633.html))
+//! - [x] **Type 5**: Redirect - [`IcmpRedirect`] - [RFC 792](https://www.rfc-editor.org/rfc/rfc792.html)
+//! - [x] **Type 11**: Time Exceeded - [`IcmpTimeExceeded`] - [RFC 792](https://www.rfc-editor.org/rfc/rfc792.html)
+//! - [x] **Type 12**: Parameter Problem - [`IcmpParamProblem`] - [RFC 792](https://www.rfc-editor.org/rfc/rfc792.html)
+//!
+//! ### Informational Messages (128-255)
+//!
+//! - [x] **Type 8**: Echo Request - [`IcmpEcho`] - [RFC 792](https://www.rfc-editor.org/rfc/rfc792.html)
+//! - [x] **Type 9**: Router Advertisement - [`IcmpRouterAdvertisement`] - [RFC 1256](https://www.rfc-editor.org/rfc/rfc1256.html)
+//! - [x] **Type 10**: Router Solicitation - [`IcmpRouterSolicitation`] - [RFC 1256](https://www.rfc-editor.org/rfc/rfc1256.html)
+//! - [x] **Type 13**: Timestamp Request - [`Icmpv4Timestamp`] - [RFC 792](https://www.rfc-editor.org/rfc/rfc792.html)
+//! - [x] **Type 14**: Timestamp Reply - [`Icmpv4Timestamp`] - [RFC 792](https://www.rfc-editor.org/rfc/rfc792.html)
+//! - [ ] **Type 15**: Information Request - Deprecated ([RFC 1788](https://www.rfc-editor.org/rfc/rfc1788.html))
+//! - [ ] **Type 16**: Information Reply - Deprecated ([RFC 1788](https://www.rfc-editor.org/rfc/rfc1788.html))
+//! - [ ] **Type 17**: Address Mask Request - Deprecated ([RFC 6918](https://www.rfc-editor.org/rfc/rfc6918.html))
+//! - [ ] **Type 18**: Address Mask Reply - Deprecated ([RFC 6918](https://www.rfc-editor.org/rfc/rfc6918.html))
+//! - [ ] **Type 30**: Traceroute - Deprecated ([RFC 6918](https://www.rfc-editor.org/rfc/rfc6918.html))
+//! - [ ] **Type 40**: Photuris - [RFC 2521](https://www.rfc-editor.org/rfc/rfc2521.html) (active standard, not implemented)
+//! - [x] **Type 42**: Extended Echo Request - [`IcmpExtendedEchoRequest`] - [RFC 8335](https://www.rfc-editor.org/rfc/rfc8335.html)
+//! - [x] **Type 43**: Extended Echo Reply - [`IcmpExtendedEchoReply`] - [RFC 8335](https://www.rfc-editor.org/rfc/rfc8335.html)
+//!
+//! ## References
+//!
+//! - [IANA ICMPv4 Parameters](https://www.iana.org/assignments/icmp-parameters/icmp-parameters.xhtml)
+//! - [RFC 792 - Internet Control Message Protocol](https://www.rfc-editor.org/rfc/rfc792.html)
+//! - [RFC 1256 - ICMP Router Discovery Messages](https://www.rfc-editor.org/rfc/rfc1256.html)
+//! - [RFC 8335 - PROBE: A Utility for Probing Interfaces](https://www.rfc-editor.org/rfc/rfc8335.html)
 
+// Message type definitions
 pub mod msg_type;
-pub use msg_type::*;
+pub use msg_type::{DestUnreachCode, Icmpv4Type, RedirectCode, TimeExceededCode};
 
-pub mod echo;
-pub use echo::IcmpEcho;
-
+// Error messages
 pub mod dest_unreach;
-pub use dest_unreach::IcmpDestUnreach;
-
+pub mod param_problem;
+pub mod redirect;
 pub mod time_exceeded;
+
+pub use dest_unreach::IcmpDestUnreach;
+pub use param_problem::IcmpParamProblem;
+pub use redirect::IcmpRedirect;
 pub use time_exceeded::IcmpTimeExceeded;
 
-pub mod redirect;
-pub use redirect::IcmpRedirect;
+// Informational messages
+pub mod echo;
+pub mod extended_echo;
+pub mod router_advertisement;
+pub mod router_solicitation;
+pub mod timestamp;
 
-pub mod param_problem;
-pub use param_problem::IcmpParamProblem;
+pub use echo::IcmpEcho;
+pub use extended_echo::{IcmpExtendedEchoReply, IcmpExtendedEchoRequest};
+pub use router_advertisement::IcmpRouterAdvertisement;
+pub use router_solicitation::IcmpRouterSolicitation;
+pub use timestamp::Icmpv4Timestamp;
 
 use crate::{field_spec, prelude::*};
 
@@ -194,6 +238,63 @@ where
     pub fn param_problem(&self) -> Option<IcmpParamProblem<&[u8]>> {
         match self.msg_type().get() {
             Icmpv4Type::ParameterProblem => IcmpParamProblem::new(self.data.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Parse as Timestamp Request or Timestamp Reply message.
+    ///
+    /// Returns `Some` if this is a Timestamp Request (type 13) or Timestamp Reply (type 14).
+    #[inline]
+    pub fn timestamp(&self) -> Option<Icmpv4Timestamp<&[u8]>> {
+        match self.msg_type().get() {
+            Icmpv4Type::Timestamp | Icmpv4Type::TimestampReply => {
+                Icmpv4Timestamp::new(self.data.as_ref())
+            }
+            _ => None,
+        }
+    }
+
+    /// Parse as Router Solicitation message.
+    ///
+    /// Returns `Some` if this is a Router Solicitation message (type 10).
+    #[inline]
+    pub fn router_solicitation(&self) -> Option<IcmpRouterSolicitation<&[u8]>> {
+        match self.msg_type().get() {
+            Icmpv4Type::RouterSolicitation => IcmpRouterSolicitation::new(self.data.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Parse as Router Advertisement message.
+    ///
+    /// Returns `Some` if this is a Router Advertisement message (type 9).
+    #[inline]
+    pub fn router_advertisement(&self) -> Option<IcmpRouterAdvertisement<&[u8]>> {
+        match self.msg_type().get() {
+            Icmpv4Type::RouterAdvertisement => IcmpRouterAdvertisement::new(self.data.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Parse as Extended Echo Request message.
+    ///
+    /// Returns `Some` if this is an Extended Echo Request message (type 42).
+    #[inline]
+    pub fn extended_echo_request(&self) -> Option<IcmpExtendedEchoRequest<&[u8]>> {
+        match self.msg_type().get() {
+            Icmpv4Type::ExtendedEchoRequest => IcmpExtendedEchoRequest::new(self.data.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Parse as Extended Echo Reply message.
+    ///
+    /// Returns `Some` if this is an Extended Echo Reply message (type 43).
+    #[inline]
+    pub fn extended_echo_reply(&self) -> Option<IcmpExtendedEchoReply<&[u8]>> {
+        match self.msg_type().get() {
+            Icmpv4Type::ExtendedEchoReply => IcmpExtendedEchoReply::new(self.data.as_ref()),
             _ => None,
         }
     }
