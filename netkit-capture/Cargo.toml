@@ -1,7 +1,13 @@
 [package]
 name = "netkit-capture"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+keywords.workspace = true
+repository.workspace = true
+description = "Packet capture file format support for netkit"
+include = ["src/**/*", "README.md", "LICENSE*"]
 
 [dependencies]
 log = { workspace = true }

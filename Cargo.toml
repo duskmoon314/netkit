@@ -1,5 +1,4 @@
 [workspace]
-# members = ["netkit-packet", "netkit-impl", "netkit-capture", "examples/*"]
 members = ["netkit-packet", "netkit-capture", "examples/*"]
 
 [workspace.package]
@@ -63,6 +62,7 @@ authors.workspace = true
 license.workspace = true
 keywords.workspace = true
 repository.workspace = true
+description = "Yet another network crate for Rust."
 include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE*"]
 
 [profile.release-prof]

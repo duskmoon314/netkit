@@ -1,6 +1,6 @@
-# netkit-packet
+# netkit-capture
 
-Attempt to provide a zero-copy and easy-to-use network packet parsing crate.
+Packet capture file format support for netkit.
 
 ## License
 
