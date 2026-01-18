@@ -4,7 +4,7 @@ pub mod linktype;
 pub mod packet;
 
 pub use error::{CaptureError, CaptureResult};
-pub use format::auto::{open_capture, open_file, CaptureFile, CaptureFormat};
+pub use format::auto::{CaptureFile, CaptureFormat, from_path, from_reader};
 pub use format::pcap::{PcapHeader, PcapPacketHeader, PcapReader, PcapWriter};
 pub use format::pcapng::{PcapngReader, PcapngWriter};
 pub use linktype::LinkType;

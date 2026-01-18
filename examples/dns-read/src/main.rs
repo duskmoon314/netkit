@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 use log::{debug, error, info};
-use netkit::capture::{LinkType, open_capture};
+use netkit::capture::{LinkType, from_reader};
 use netkit::packet::layer::eth;
 use netkit::packet::prelude::*;
 
@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     info!("Reading DNS packets from: {}", args.input.display());
 
     let file = File::open(&args.input)?;
-    let reader = open_capture(BufReader::new(file))?;
+    let reader = from_reader(BufReader::new(file))?;
 
     let mut total_packets = 0u64;
     let mut dns_packets = 0u64;

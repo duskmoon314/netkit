@@ -27,7 +27,7 @@
 use std::cmp::min;
 use std::io::{BufReader, BufWriter, Read, Write};
 
-use log::warn;
+use log::debug;
 
 use crate::error::{CaptureError, CaptureResult};
 use crate::linktype::LinkType;
@@ -258,7 +258,7 @@ impl<R: Read> PcapReader<R> {
         // Read packet data
         // let data_len = min(header.incl_len, self.header.snaplen) as usize;
         if header.incl_len > self.header.snaplen {
-            warn!(
+            debug!(
                 "Packet incl_len {} exceeds snaplen {}",
                 header.incl_len, self.header.snaplen
             );

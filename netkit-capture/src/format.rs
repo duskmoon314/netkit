@@ -10,6 +10,6 @@ pub mod auto;
 pub mod pcap;
 pub mod pcapng;
 
-pub use auto::{open_capture, open_file, CaptureFile, CaptureFormat};
+pub use auto::{CaptureFile, CaptureFormat, from_path, from_reader};
 pub use pcap::{PcapHeader, PcapPacketHeader, PcapReader, PcapWriter};
 pub use pcapng::{PcapngReader, PcapngWriter};

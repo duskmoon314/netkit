@@ -24,12 +24,12 @@
 
 use std::io::{BufReader, Read, Seek, SeekFrom};
 
+use crate::CaptureReader;
 use crate::error::{CaptureError, CaptureResult};
 use crate::format::pcap::{self, PcapReader};
 use crate::format::pcapng::{self, PcapngReader};
 use crate::linktype::LinkType;
 use crate::packet::Packet;
-use crate::CaptureReader;
 
 /// Detected capture file format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -191,7 +191,7 @@ impl<R: Read> CaptureReader for CaptureFile<R> {
     }
 }
 
-/// Open a capture file with automatic format detection.
+/// Create a capture file reader from a reader with automatic format detection.
 ///
 /// This is a convenience function that creates a [`CaptureFile`] from a reader.
 ///
@@ -199,32 +199,32 @@ impl<R: Read> CaptureReader for CaptureFile<R> {
 ///
 /// ```ignore
 /// use std::fs::File;
-/// use netkit_capture::format::auto::open_capture;
+/// use netkit_capture::from_reader;
 ///
 /// let file = File::open("capture.pcap")?;
-/// let mut reader = open_capture(file)?;
+/// let mut reader = from_reader(file)?;
 ///
 /// for packet in reader {
 ///     println!("{:?}", packet?);
 /// }
 /// ```
-pub fn open_capture<R: Read + Seek>(reader: R) -> CaptureResult<CaptureFile<R>> {
+pub fn from_reader<R: Read + Seek>(reader: R) -> CaptureResult<CaptureFile<R>> {
     CaptureFile::open(reader)
 }
 
-/// Open a capture file from a path with automatic format detection.
+/// Create a capture file reader from a path with automatic format detection.
 ///
 /// # Example
 ///
 /// ```ignore
-/// use netkit_capture::format::auto::open_file;
+/// use netkit_capture::from_path;
 ///
-/// let mut reader = open_file("capture.pcap")?;
+/// let mut reader = from_path("capture.pcap")?;
 /// for packet in reader {
 ///     println!("{:?}", packet?);
 /// }
 /// ```
-pub fn open_file<P: AsRef<std::path::Path>>(
+pub fn from_path<P: AsRef<std::path::Path>>(
     path: P,
 ) -> CaptureResult<CaptureFile<std::io::BufReader<std::fs::File>>> {
     let file = std::fs::File::open(path)?;
@@ -235,9 +235,9 @@ pub fn open_file<P: AsRef<std::path::Path>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CaptureWriter;
     use crate::format::pcap::PcapWriter;
     use crate::format::pcapng::PcapngWriter;
-    use crate::CaptureWriter;
     use std::io::Cursor;
 
     #[test]

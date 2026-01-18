@@ -8,7 +8,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use indicatif_log_bridge::LogWrapper;
 use log::{debug, info};
 use netkit::capture::format::pcap::PcapWriter;
-use netkit::capture::{CaptureReader, LinkType, Packet, open_file};
+use netkit::capture::{CaptureReader, LinkType, Packet, from_path};
 use netkit::packet::layer::eth;
 use netkit::packet::layer::ip::protocol::IpProtocol;
 use netkit::packet::prelude::*;
@@ -228,7 +228,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Open input capture file (auto-detects pcap/pcapng)
-    let reader = open_file(&args.input)?;
+    let reader = from_path(&args.input)?;
 
     let linktype = reader.linktype();
     let nanoseconds = reader.is_nanosecond_precision();
@@ -397,7 +397,7 @@ fn two_pass_split(
     info!("Pass 1/2: Counting packets per flow...");
 
     // First pass: count packets per flow
-    let reader = open_file(&args.input)?;
+    let reader = from_path(&args.input)?;
 
     let pg = multi.add(ProgressBar::new_spinner().with_finish(indicatif::ProgressFinish::Abandon));
     pg.set_style(ProgressStyle::with_template(
@@ -456,7 +456,7 @@ fn two_pass_split(
     info!("Pass 2/2: Extracting {} flows...", selected_flows.len());
 
     // Second pass: extract only selected flows
-    let reader = open_file(&args.input)?;
+    let reader = from_path(&args.input)?;
 
     let pg = multi.add(ProgressBar::new_spinner().with_finish(indicatif::ProgressFinish::Abandon));
     pg.set_style(ProgressStyle::with_template(

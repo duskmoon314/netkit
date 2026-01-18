@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use chrono::{DateTime, Utc};
 use clap::{Args, Parser, ValueEnum};
 use log::{debug, error, info};
-use netkit::capture::format::auto::open_capture;
+use netkit::capture::format::auto::from_reader;
 use netkit::capture::{CaptureReader, LinkType};
 use netkit::packet::prelude::*;
 use polars::prelude::*;
@@ -318,7 +318,7 @@ fn process_ipv4_packet<T: AsRef<[u8]>>(
 fn info(file_path: PathBuf, args: &Flags, multi: &indicatif::MultiProgress) -> anyhow::Result<()> {
     let file = std::fs::File::open(file_path.clone())?;
     let file_size = file.metadata()?.len();
-    let reader = open_capture(file)?;
+    let reader = from_reader(file)?;
     let format = reader.format();
 
     debug!(

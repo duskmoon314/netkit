@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 // use netkit::capture::format::pcap::PcapReader;
-use netkit::capture::{open_capture, CaptureReader};
+use netkit::capture::{from_reader, CaptureReader};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -17,7 +17,7 @@ fn main() -> anyhow::Result<()> {
 
     let file = std::fs::File::open(&args.pcap_file)?;
 
-    let reader = open_capture(file)?;
+    let reader = from_reader(file)?;
 
     println!(
         "Reading {} file: {:?} snaplen: {}",

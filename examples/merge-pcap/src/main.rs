@@ -11,7 +11,7 @@ use log::{debug, info};
 use netkit::capture::format::pcap::PcapWriter;
 use netkit::capture::packet::Packet;
 use netkit::capture::{CaptureFile, LinkType};
-use netkit::capture::{CaptureWriter, open_file};
+use netkit::capture::{CaptureWriter, from_path};
 use netkit::packet::prelude::*;
 use rand::seq::IndexedRandom;
 use rand::{SeedableRng, rngs::StdRng};
@@ -184,7 +184,7 @@ impl InputFile {
     }
 
     fn into_iter(self, cli: &Cli, pg: ProgressBar) -> InputFileIterator {
-        let reader = open_file(&self.path)
+        let reader = from_path(&self.path)
             .unwrap_or_else(|e| panic!("Unable to open pcap file {}: {}", self.path.display(), e));
 
         let src_ip_pool = self
@@ -296,7 +296,7 @@ impl Iterator for InputFileIterator {
                         return None;
                     }
 
-                    self.reader = open_file(&self.file.path).unwrap_or_else(|e| {
+                    self.reader = from_path(&self.file.path).unwrap_or_else(|e| {
                         panic!(
                             "Unable to open pcap file {}: {}",
                             self.file.path.display(),
