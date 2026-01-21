@@ -432,8 +432,12 @@ where
                         sym,
                     ))
                 } else {
-                    Err(Ipv4Error::InvalidArguments(
-                        "Cannot extract ports from non-TCP/UDP protocol".to_string(),
+                    Ok(FlowId::from_tuple4(
+                        self.src().get(),
+                        self.dst().get(),
+                        0,
+                        0,
+                        sym,
                     ))
                 }
             }
@@ -459,8 +463,13 @@ where
                         sym,
                     ))
                 } else {
-                    Err(Ipv4Error::InvalidArguments(
-                        "Cannot extract ports from non-TCP/UDP protocol".to_string(),
+                    Ok(FlowId::from_tuple5(
+                        self.src().get(),
+                        self.dst().get(),
+                        0,
+                        0,
+                        self.protocol().get(),
+                        sym,
                     ))
                 }
             }
