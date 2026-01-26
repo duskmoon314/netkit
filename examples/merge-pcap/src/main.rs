@@ -148,6 +148,9 @@ struct InputFile {
     /// The number of parallel input files
     parallel: u32,
 
+    /// Rewrite both source and destination IP addresses
+    ipmap: Vec<IpMap>,
+
     /// Rewrite source IP address
     srcipmap: Vec<IpMap>,
 
@@ -162,6 +165,7 @@ impl Default for InputFile {
             start_time: vec![0],
             repeat: 1,
             parallel: 1,
+            ipmap: vec![],
             srcipmap: vec![],
             dstipmap: vec![],
         }
@@ -178,6 +182,7 @@ impl InputFile {
             start_time: vec![0],
             repeat: 1,
             parallel: 1,
+            ipmap: vec![],
             srcipmap: vec![],
             dstipmap: vec![],
         })
@@ -188,8 +193,9 @@ impl InputFile {
             .unwrap_or_else(|e| panic!("Unable to open pcap file {}: {}", self.path.display(), e));
 
         let src_ip_pool = self
-            .srcipmap
+            .ipmap
             .iter()
+            .chain(self.srcipmap.iter())
             .filter(|m| {
                 matches!(
                     m,
@@ -203,8 +209,9 @@ impl InputFile {
             })
             .collect::<Vec<Ipv4Addr>>();
         let dst_ip_pool = self
-            .dstipmap
+            .ipmap
             .iter()
+            .chain(self.dstipmap.iter())
             .filter(|m| {
                 matches!(
                     m,
@@ -219,21 +226,32 @@ impl InputFile {
             .collect::<Vec<Ipv4Addr>>();
 
         let src_ip_maps = self
-            .srcipmap
+            .ipmap
             .iter()
+            .chain(self.srcipmap.iter())
             .filter_map(|m| match m {
                 IpMap::Map(src, dst) => Some((*src, *dst)),
                 _ => None,
             })
             .collect::<Vec<(ipnet::IpNet, ipnet::IpNet)>>();
         let dst_ip_maps = self
-            .dstipmap
+            .ipmap
             .iter()
+            .chain(self.dstipmap.iter())
             .filter_map(|m| match m {
                 IpMap::Map(src, dst) => Some((*src, *dst)),
                 _ => None,
             })
             .collect::<Vec<(ipnet::IpNet, ipnet::IpNet)>>();
+
+        debug!(
+            "Input file {}: src_ip_pool={:?}, dst_ip_pool={:?}, src_ip_maps={:?}, dst_ip_maps={:?}",
+            self.path.display(),
+            src_ip_pool,
+            dst_ip_pool,
+            src_ip_maps,
+            dst_ip_maps
+        );
 
         InputFileIterator {
             file: self,
@@ -269,6 +287,59 @@ struct InputFileIterator {
     dst_ip_pool: Vec<Ipv4Addr>,
     src_ip_maps: Vec<(ipnet::IpNet, ipnet::IpNet)>,
     dst_ip_maps: Vec<(ipnet::IpNet, ipnet::IpNet)>,
+}
+
+impl InputFileIterator {
+    /// Rewrite IPv4 source and destination addresses based on configured IP maps and pools
+    fn rewrite_ipv4(&mut self, ipv4: &mut Ipv4<&mut [u8]>) {
+        // Handle source IP mapping
+        let mut src_mapped = false;
+        for (src_net, dst_net) in &self.src_ip_maps {
+            if let (ipnet::IpNet::V4(src_v4), ipnet::IpNet::V4(dst_v4)) = (src_net, dst_net) {
+                let current_ip = ipv4.src().get();
+                if src_v4.contains(&current_ip) {
+                    // Use dst_net's network part with current_ip's host part under dst_net's mask
+                    let dst_network = u32::from(dst_v4.network());
+                    let dst_hostmask = u32::from(dst_v4.hostmask());
+                    let host_part = u32::from(current_ip) & dst_hostmask;
+                    let new_ip = Ipv4Addr::from(dst_network | host_part);
+                    ipv4.src_mut().set(new_ip);
+                    src_mapped = true;
+                    break;
+                }
+            }
+        }
+
+        // If not mapped by IpMap::Map, use random pool selection
+        if !src_mapped && !self.src_ip_pool.is_empty() {
+            let src_ip = self.src_ip_pool.choose(&mut self.rng).unwrap();
+            ipv4.src_mut().set(*src_ip);
+        }
+
+        // Handle destination IP mapping
+        let mut dst_mapped = false;
+        for (src_net, dst_net) in &self.dst_ip_maps {
+            if let (ipnet::IpNet::V4(src_v4), ipnet::IpNet::V4(dst_v4)) = (src_net, dst_net) {
+                let current_ip = ipv4.dst().get();
+                if src_v4.contains(&current_ip) {
+                    // Use dst_net's network part with current_ip's host part under dst_net's mask
+                    let dst_network = u32::from(dst_v4.network());
+                    let dst_hostmask = u32::from(dst_v4.hostmask());
+                    let host_part = u32::from(current_ip) & dst_hostmask;
+                    let new_ip = Ipv4Addr::from(dst_network | host_part);
+                    ipv4.dst_mut().set(new_ip);
+                    dst_mapped = true;
+                    break;
+                }
+            }
+        }
+
+        // If not mapped by IpMap::Map, use random pool selection
+        if !dst_mapped && !self.dst_ip_pool.is_empty() {
+            let dst_ip = self.dst_ip_pool.choose(&mut self.rng).unwrap();
+            ipv4.dst_mut().set(*dst_ip);
+        }
+    }
 }
 
 impl Iterator for InputFileIterator {
@@ -310,7 +381,17 @@ impl Iterator for InputFileIterator {
 
         let timestamp = packet.timestamp_ns;
 
-        if self.first_packet_time.is_none() {
+        if let Some(first_time) = self.first_packet_time {
+            // Same group same repeat subgroup
+            // Calculate the time offset
+            let current_packet_time = timestamp
+                - self
+                    .original_first_packet_time
+                    .expect("No original first packet time")
+                + first_time;
+
+            packet.timestamp_ns = current_packet_time;
+        } else {
             // A new start of pcap, may be repeat or a new group
 
             self.original_first_packet_time = Some(timestamp);
@@ -343,17 +424,6 @@ impl Iterator for InputFileIterator {
 
             self.first_packet_time = Some(new_ts);
             packet.timestamp_ns = new_ts;
-        } else {
-            // Same group same repeat subgroup
-            // Calculate the time offset
-
-            let current_packet_time = timestamp
-                - self
-                    .original_first_packet_time
-                    .expect("No first packet time")
-                + self.first_packet_time.expect("No first packet time");
-
-            packet.timestamp_ns = current_packet_time;
         }
 
         self.last_packet_time = packet.timestamp_ns;
@@ -371,62 +441,25 @@ impl Iterator for InputFileIterator {
         }
 
         for item in items.iter_mut() {
-            let mut eth = Eth::new(&mut item.data).expect("Failed to parse Ethernet header");
-
-            let mut ipv4 = match eth.ipv4_mut() {
-                Some(ipv4) => ipv4,
-                None => {
-                    // If no IPv4 header, skip IP rewriting
-                    continue;
-                }
-            };
-
-            // Handle source IP mapping
-            let mut src_mapped = false;
-            for (src_net, dst_net) in &self.src_ip_maps {
-                if let (ipnet::IpNet::V4(src_v4), ipnet::IpNet::V4(dst_v4)) = (src_net, dst_net) {
-                    let current_ip = ipv4.src().get();
-                    if src_v4.contains(&current_ip) {
-                        // Use dst_net's network part with current_ip's host part under dst_net's mask
-                        let dst_network = u32::from(dst_v4.network());
-                        let dst_hostmask = u32::from(dst_v4.hostmask());
-                        let host_part = u32::from(current_ip) & dst_hostmask;
-                        let new_ip = Ipv4Addr::from(dst_network | host_part);
-                        ipv4.src_mut().set(new_ip);
-                        src_mapped = true;
-                        break;
+            // Process IPv4 layer based on link type
+            match item.linktype {
+                LinkType::Ethernet => {
+                    if let Ok(mut eth) = Eth::new(&mut item.data)
+                        && let Some(mut ipv4) = eth.ipv4_mut()
+                    {
+                        self.rewrite_ipv4(&mut ipv4);
                     }
                 }
-            }
-
-            // If not mapped by IpMap::Map, use random pool selection
-            if !src_mapped && !self.src_ip_pool.is_empty() {
-                let src_ip = self.src_ip_pool.choose(&mut self.rng).unwrap();
-                ipv4.src_mut().set(*src_ip);
-            }
-
-            // Handle destination IP mapping
-            let mut dst_mapped = false;
-            for (src_net, dst_net) in &self.dst_ip_maps {
-                if let (ipnet::IpNet::V4(src_v4), ipnet::IpNet::V4(dst_v4)) = (src_net, dst_net) {
-                    let current_ip = ipv4.dst().get();
-                    if src_v4.contains(&current_ip) {
-                        // Use dst_net's network part with current_ip's host part under dst_net's mask
-                        let dst_network = u32::from(dst_v4.network());
-                        let dst_hostmask = u32::from(dst_v4.hostmask());
-                        let host_part = u32::from(current_ip) & dst_hostmask;
-                        let new_ip = Ipv4Addr::from(dst_network | host_part);
-                        ipv4.dst_mut().set(new_ip);
-                        dst_mapped = true;
-                        break;
+                LinkType::LinuxSll => {
+                    if let Ok(mut sll) = Sll::new(&mut item.data)
+                        && let Some(mut ipv4) = sll.ipv4_mut()
+                    {
+                        self.rewrite_ipv4(&mut ipv4);
                     }
                 }
-            }
-
-            // If not mapped by IpMap::Map, use random pool selection
-            if !dst_mapped && !self.dst_ip_pool.is_empty() {
-                let dst_ip = self.dst_ip_pool.choose(&mut self.rng).unwrap();
-                ipv4.dst_mut().set(*dst_ip);
+                _ => {
+                    // Unsupported link type, skip IP rewriting
+                }
             }
         }
 
