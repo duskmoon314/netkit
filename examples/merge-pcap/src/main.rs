@@ -6,8 +6,7 @@ use anyhow::anyhow;
 use clap::{ArgAction, Parser};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use indicatif_log_bridge::LogWrapper;
-use log::error;
-use log::{debug, info};
+use log::{debug, error, info};
 use netkit::capture::format::pcap::PcapWriter;
 use netkit::capture::packet::Packet;
 use netkit::capture::{CaptureFile, LinkType};
@@ -20,7 +19,7 @@ use serde::Deserialize;
 /// merge-pcap (netkit)
 ///
 /// A tool to merge multiple pcap files into one based on the given requirements
-#[derive(Debug, Parser, Deserialize)]
+#[derive(Debug, Clone, Parser, Deserialize)]
 #[command(version, about, long_about)]
 struct Cli {
     /// Erase the timestamp of packets
@@ -96,6 +95,14 @@ impl Cli {
             self.keep_subsec = Some(keep_subsec);
         }
     }
+}
+
+/// Config file wrapper that supports both single config and array of configs
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ConfigFile {
+    Single(Cli),
+    Multiple(Vec<Cli>),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -486,45 +493,8 @@ impl Ord for PacketHeapItem {
     }
 }
 
-fn main() -> anyhow::Result<()> {
-    let logger = env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
-        .parse_default_env()
-        .build();
-    let level = logger.filter();
-
-    let multi = MultiProgress::new();
-    LogWrapper::new(multi.clone(), logger).try_init()?;
-    log::set_max_level(level);
-    let pg_style = ProgressStyle::with_template(
-        "{prefix:3} [{elapsed_precise}] {human_pos:>12} pkts    {msg}",
-    )?;
-
-    let mut args = Cli::parse();
-
-    if let Some(ref config_file) = args.config_file {
-        match config_file.extension() {
-            Some(ext) if ext == "json" => {
-                let config = std::fs::read_to_string(config_file)?;
-                let config: Cli = serde_json::from_str(&config)?;
-
-                args.merge_config(&config);
-            }
-            None => {
-                return Err(anyhow!(
-                    "Cannot determine the file type of the config file. Please provide a file with .json extension."
-                ));
-            }
-            _ => {
-                return Err(anyhow!(
-                    "Unsupported config file type. Please provide a file with .json extension."
-                ));
-            }
-        }
-    }
-
-    debug!("Parsed arguments: {args:?}");
-
+/// Perform the merge operation for a single configuration
+fn do_merge(args: &Cli, multi: &MultiProgress, pg_style: &ProgressStyle) -> anyhow::Result<()> {
     let start = std::time::Instant::now();
 
     let output_file = args.output_file.clone().expect("Output file is required");
@@ -553,7 +523,7 @@ fn main() -> anyhow::Result<()> {
             pg.set_message(input_file.path.display().to_string());
             pg.enable_steady_tick(Duration::from_secs(1));
 
-            input_file.clone().into_iter(&args, pg)
+            input_file.clone().into_iter(args, pg)
         })
         .collect::<Vec<_>>();
 
@@ -610,9 +580,79 @@ fn main() -> anyhow::Result<()> {
 
     info!(
         "Merged pcap files into {}, taken {} seconds",
-        args.output_file.unwrap().display(),
+        args.output_file.as_ref().unwrap().display(),
         start.elapsed().as_secs_f64()
     );
+
+    Ok(())
+}
+
+fn main() -> anyhow::Result<()> {
+    let logger = env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
+        .build();
+    let level = logger.filter();
+
+    let multi = MultiProgress::new();
+    LogWrapper::new(multi.clone(), logger).try_init()?;
+    log::set_max_level(level);
+    let pg_style = ProgressStyle::with_template(
+        "{prefix:3} [{elapsed_precise}] {human_pos:>12} pkts    {msg}",
+    )?;
+
+    let mut args = Cli::parse();
+
+    if let Some(ref config_file) = args.config_file {
+        match config_file.extension() {
+            Some(ext) if ext == "json" => {
+                let config_content = std::fs::read_to_string(config_file)?;
+                let config_file_data: ConfigFile = serde_json::from_str(&config_content)?;
+
+                match config_file_data {
+                    ConfigFile::Single(config) => {
+                        // Single config: merge with CLI args and run once
+                        args.merge_config(&config);
+                        debug!("Parsed arguments (single config): {args:?}");
+                        do_merge(&args, &multi, &pg_style)?;
+                    }
+                    ConfigFile::Multiple(configs) => {
+                        // Multiple configs: run merge for each config
+                        let total_configs = configs.len();
+                        info!("Processing {} configurations", total_configs);
+
+                        for (idx, config) in configs.into_iter().enumerate() {
+                            info!("Processing configuration {}/{}", idx + 1, total_configs);
+
+                            let mut config_args = args.clone();
+                            config_args.merge_config(&config);
+
+                            debug!("Parsed arguments (config {}): {config_args:?}", idx + 1);
+
+                            if let Err(e) = do_merge(&config_args, &multi, &pg_style) {
+                                error!("Failed to process configuration {}: {}", idx + 1, e);
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+            }
+            None => {
+                return Err(anyhow!(
+                    "Cannot determine the file type of the config file. Please provide a file with .json extension."
+                ));
+            }
+            _ => {
+                return Err(anyhow!(
+                    "Unsupported config file type. Please provide a file with .json extension."
+                ));
+            }
+        }
+    } else {
+        // No config file, just use CLI args
+        debug!("Parsed arguments (CLI only): {args:?}");
+        do_merge(&args, &multi, &pg_style)?;
+    }
 
     Ok(())
 }
