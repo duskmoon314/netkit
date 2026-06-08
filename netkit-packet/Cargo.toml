@@ -25,6 +25,8 @@ thiserror = { workspace = true }
 # serde
 serde = { workspace = true, optional = true }
 
+log = { workspace = true }
+
 [dev-dependencies]
 criterion = { workspace = true }
 pprof = { workspace = true }
