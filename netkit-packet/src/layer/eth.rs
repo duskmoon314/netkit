@@ -1,5 +1,7 @@
 //! Ethernet layer.
 
+use log::trace;
+
 use crate::{field_spec, prelude::*};
 
 pub mod eth_addr;
@@ -134,7 +136,8 @@ where
     /// Get the IPv4 layer if the Eth type is IPv4.
     pub fn ipv4(&self) -> Option<Ipv4<&[u8]>> {
         if self.eth_type().get() == EthType::Ipv4 {
-            Ipv4::new(self.payload()).ok()
+            // Ipv4::new(self.payload()).ok()
+            Some(unsafe { Ipv4::new_unchecked(self.payload()) })
         } else if self.eth_type().get() == EthType::Vlan {
             Vlan::<&[u8]>::ipv4_from_bytes(self.payload())
         } else {
@@ -191,10 +194,19 @@ where
     /// Get the mutable IPv4 layer if the Eth type is IPv4.
     pub fn ipv4_mut(&mut self) -> Option<Ipv4<&mut [u8]>> {
         if self.eth_type().get() == EthType::Ipv4 {
-            Ipv4::new(self.payload_mut()).ok()
+            // TODO: Add a configurable option to skip validation for truncated packets.
+            // This is useful for processing captures with short snaplen.
+
+            // Ipv4::new(self.payload_mut()).ok()
+
+            Some(unsafe { Ipv4::new_unchecked(self.payload_mut()) })
         } else if self.eth_type().get() == EthType::Vlan {
             Vlan::<&mut [u8]>::ipv4_mut_from_bytes(self.payload_mut())
         } else {
+            trace!(
+                "Eth with type {:?} does not contain IPv4 layer",
+                self.eth_type().get()
+            );
             None
         }
     }

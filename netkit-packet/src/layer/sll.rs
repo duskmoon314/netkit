@@ -164,7 +164,8 @@ where
     /// Get the IPv4 layer if the protocol type is IPv4.
     pub fn ipv4(&self) -> Option<Ipv4<&[u8]>> {
         if self.protocol_type().get() == EthType::Ipv4 {
-            Ipv4::new(self.payload()).ok()
+            // Ipv4::new(self.payload()).ok()
+            Some(unsafe { Ipv4::new_unchecked(self.payload()) })
         } else {
             None
         }
@@ -220,7 +221,8 @@ where
     /// Get the mutable IPv4 layer if the protocol type is IPv4.
     pub fn ipv4_mut(&mut self) -> Option<Ipv4<&mut [u8]>> {
         if self.protocol_type().get() == EthType::Ipv4 {
-            Ipv4::new(self.payload_mut()).ok()
+            Some(unsafe { Ipv4::new_unchecked(self.payload_mut()) })
+            // Ipv4::new(self.payload_mut()).ok()
         } else {
             None
         }
